@@ -1,0 +1,21 @@
+{
+  "type": "panel",
+  "name": "Transition Graph",
+  "id": "transition-graph-cytoscape",
+  "dataFormats": ["table"],
+  "info": {
+    "description": "Transition graph using cytoscape",
+    "author": {
+      "name": "Nam Le"
+    },
+    "keywords": ["graph", "transition"],
+    "screenshots": [],
+    "version": "1.0.0",
+    "updated": "2020-02-05"
+  },
+
+  "dependencies": {
+    "grafanaVersion": "6.4.4",
+    "plugins": []
+  }
+}
