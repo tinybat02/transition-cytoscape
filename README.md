@@ -1,6 +1,6 @@
-# Vis network
+# Cytoscape graph
 
-This is a vis network plugin for Grafana
+This is a cytoscape plugin for Grafana using cytoscape.js
 
 To work with this plugin run:
 
