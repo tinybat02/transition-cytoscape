@@ -2,7 +2,6 @@ import React, { PureComponent } from 'react';
 import { PanelProps, Vector as VectorData } from '@grafana/data';
 import { SimpleOptions } from 'types';
 import cytoscape from 'cytoscape';
-//import klay from 'cytoscape-klay';
 import spread from 'cytoscape-spread';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { getGraphElements } from './util/helper';
@@ -60,7 +59,6 @@ export class MainPanel extends PureComponent<Props> {
               content: 'data(label)',
               'background-color': '#b3e1f5',
               'font-family': 'monospace',
-              'font-size': '0.4em',
               'text-valign': 'center',
             },
           },
@@ -71,7 +69,6 @@ export class MainPanel extends PureComponent<Props> {
               'line-color': '#1990c1',
               width: 0.3,
               label: 'data(value)',
-              'font-size': '0.5em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
             },
