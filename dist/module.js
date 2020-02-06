@@ -38348,6 +38348,7 @@ function (_super) {
       stylesheet: [{
         selector: 'node',
         style: {
+          width: 100,
           shape: 'ellipse',
           content: 'data(label)',
           'background-color': '#b3e1f5',
@@ -38361,6 +38362,7 @@ function (_super) {
           'line-color': '#1990c1',
           width: 0.3,
           label: 'data(value)',
+          'font-size': '0.6em',
           'target-arrow-shape': 'vee',
           'target-arrow-color': '#1990c1'
         }
