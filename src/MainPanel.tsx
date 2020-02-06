@@ -70,7 +70,7 @@ export class MainPanel extends PureComponent<Props> {
               'line-color': '#1990c1',
               width: 0.3,
               label: 'data(value)',
-              'font-size': '1em',
+              'font-size': '0.8em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
             },
