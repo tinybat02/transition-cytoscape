@@ -68,7 +68,7 @@ export class MainPanel extends PureComponent<Props> {
             style: {
               'curve-style': 'bezier',
               'line-color': '#1990c1',
-              width: 'data(value)',
+              label: 'data(value)',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
             },
