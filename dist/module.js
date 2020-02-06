@@ -37164,16 +37164,16 @@ var getGraphElements = function getGraphElements(bufferSource, bufferTarget, buf
   var elements = allNodes.map(function (item) {
     return {
       data: {
-        id: item,
-        label: item
+        id: item !== '' ? item : 'N/A',
+        label: item !== '' ? item : 'N/A'
       }
     };
   });
   bufferSource.map(function (item, index) {
     elements.push({
       data: {
-        source: item,
-        target: bufferTarget[index],
+        source: item !== '' ? item : 'N/A',
+        target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
         value: bufferValue[index]
       }
     });
