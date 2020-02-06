@@ -2,11 +2,12 @@ import React, { PureComponent } from 'react';
 import { PanelProps, Vector as VectorData } from '@grafana/data';
 import { SimpleOptions } from 'types';
 import cytoscape from 'cytoscape';
-import klay from 'cytoscape-klay';
+//import klay from 'cytoscape-klay';
+import spread from 'cytoscape-spread';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { getGraphElements } from './util/helper';
 
-cytoscape.use(klay);
+cytoscape.use(spread);
 
 interface Buffer extends VectorData {
   buffer: Array<string | number>;
@@ -77,7 +78,7 @@ export class MainPanel extends PureComponent<Props> {
           },
         ]}
         layout={{
-          name: 'klay',
+          name: 'spread',
           fit: true,
         }}
         style={{

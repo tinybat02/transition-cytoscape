@@ -1,4 +1,4 @@
-declare module 'cytoscape-klay';
+declare module 'cytoscape-spread';
 
 declare module 'react-cytoscapejs' {
   import cytoscape, { NodeDataDefinition, EdgeDataDefinition } from 'cytoscape';
