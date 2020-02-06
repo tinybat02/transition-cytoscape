@@ -37079,7 +37079,9 @@ function (_super) {
         style: {
           'curve-style': 'bezier',
           'line-color': '#1990c1',
+          width: 0.3,
           label: 'data(value)',
+          'font-size': '0.5em',
           'target-arrow-shape': 'vee',
           'target-arrow-color': '#1990c1'
         }
