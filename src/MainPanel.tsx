@@ -55,7 +55,7 @@ export class MainPanel extends PureComponent<Props> {
           {
             selector: 'node',
             style: {
-              width: 100,
+              width: 120,
               shape: 'ellipse',
               content: 'data(label)',
               'background-color': '#b3e1f5',
@@ -70,7 +70,7 @@ export class MainPanel extends PureComponent<Props> {
               'line-color': '#1990c1',
               width: 0.3,
               label: 'data(value)',
-              'font-size': '0.6em',
+              'font-size': '1em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
             },
