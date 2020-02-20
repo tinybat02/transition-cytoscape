@@ -40335,7 +40335,6 @@ function (_super) {
 
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4___default.a, {
       elements: elements,
-      autoungrabify: true,
       userZoomingEnabled: false,
       userPanningEnabled: false,
       stylesheet: [{
@@ -40346,7 +40345,8 @@ function (_super) {
           content: 'data(label)',
           'background-color': '#b3e1f5',
           'font-family': 'monospace',
-          'text-valign': 'center'
+          'text-valign': 'center',
+          events: 'no'
         }
       }, {
         selector: 'edge',
@@ -40357,7 +40357,8 @@ function (_super) {
           //label: 'data(value)',
           //'font-size': '0.8em',
           'target-arrow-shape': 'vee',
-          'target-arrow-color': '#1990c1'
+          'target-arrow-color': '#1990c1',
+          events: 'no'
         }
       }],
       layout: {

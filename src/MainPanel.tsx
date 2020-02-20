@@ -53,7 +53,6 @@ export class MainPanel extends PureComponent<Props> {
     return (
       <CytoscapeComponent
         elements={elements}
-        autoungrabify={true}
         userZoomingEnabled={false}
         userPanningEnabled={false}
         stylesheet={[
@@ -66,6 +65,7 @@ export class MainPanel extends PureComponent<Props> {
               'background-color': '#b3e1f5',
               'font-family': 'monospace',
               'text-valign': 'center',
+              events: 'no',
             },
           },
           {
@@ -78,6 +78,7 @@ export class MainPanel extends PureComponent<Props> {
               //'font-size': '0.8em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
+              events: 'no',
             },
           },
         ]}

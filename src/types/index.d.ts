@@ -26,6 +26,7 @@ declare module 'react-cytoscapejs' {
     boxSelectionEnabled?: boolean;
     autoungrabify?: boolean;
     autounselectify?: boolean;
+    autolock?: boolean;
   };
 
   interface CytoscapeComponentInterface extends FC<CytoscapeComponentProps> {
