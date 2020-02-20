@@ -40363,7 +40363,7 @@ function (_super) {
       layout: {
         name: 'avsdf',
         fit: true,
-        nodeSeparation: 150
+        nodeSeparation: 200
       },
       style: {
         width: width,

@@ -84,7 +84,7 @@ export class MainPanel extends PureComponent<Props> {
         layout={{
           name: 'avsdf',
           fit: true,
-          nodeSeparation: 150,
+          nodeSeparation: 200,
         }}
         style={{
           width,
