@@ -86,18 +86,18 @@ define(["@grafana/ui","react","react-dom"], function(__WEBPACK_EXTERNAL_MODULE__
 /************************************************************************/
 /******/ ({
 
-/***/ "../node_modules/cytoscape-spread/cytoscape-spread.js":
-/*!************************************************************!*\
-  !*** ../node_modules/cytoscape-spread/cytoscape-spread.js ***!
-  \************************************************************/
+/***/ "../node_modules/avsdf-base/avsdf-base.js":
+/*!************************************************!*\
+  !*** ../node_modules/avsdf-base/avsdf-base.js ***!
+  \************************************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(true)
-		module.exports = factory(__webpack_require__(/*! weaverjs */ "../node_modules/weaverjs/dist/weaver.js"));
+		module.exports = factory(__webpack_require__(/*! layout-base */ "../node_modules/layout-base/layout-base.js"));
 	else {}
-})(this, function(__WEBPACK_EXTERNAL_MODULE_3__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_0__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -163,501 +163,14 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 1);
+/******/ 	return __webpack_require__(__webpack_require__.s = 6);
 /******/ })
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ (function(module, exports) {
 
-var Thread = __webpack_require__(3).Thread;
-
-var Voronoi = __webpack_require__(2);
-
-var defaults = {
-  animate: true, // Whether to show the layout as it's running
-  ready: undefined, // Callback on layoutready
-  stop: undefined, // Callback on layoutstop
-  fit: true, // Reset viewport to fit default simulationBounds
-  minDist: 20, // Minimum distance between nodes
-  padding: 20, // Padding
-  expandingFactor: -1.0, // If the network does not satisfy the minDist
-  // criterium then it expands the network of this amount
-  // If it is set to -1.0 the amount of expansion is automatically
-  // calculated based on the minDist, the aspect ratio and the
-  // number of nodes
-  prelayout: { name: 'cose' }, // Layout options for the first phase
-  maxExpandIterations: 4, // Maximum number of expanding iterations
-  boundingBox: undefined, // Constrain layout bounds; { x1, y1, x2, y2 } or { x1, y1, w, h }
-  randomize: false // Uses random initial node positions on true
-};
-
-function SpreadLayout( options ) {
-  var opts = this.options = {};
-  for( var i in defaults ){ opts[i] = defaults[i]; }
-  for( var i in options ){ opts[i] = options[i]; }
-}
-
-SpreadLayout.prototype.run = function() {
-
-  var layout = this;
-  var options = this.options;
-  var cy = options.cy;
-
-  var bb = options.boundingBox || { x1: 0, y1: 0, w: cy.width(), h: cy.height() };
-  if( bb.x2 === undefined ){ bb.x2 = bb.x1 + bb.w; }
-  if( bb.w === undefined ){ bb.w = bb.x2 - bb.x1; }
-  if( bb.y2 === undefined ){ bb.y2 = bb.y1 + bb.h; }
-  if( bb.h === undefined ){ bb.h = bb.y2 - bb.y1; }
-
-  var nodes = cy.nodes();
-  var edges = cy.edges();
-  var cWidth = cy.width();
-  var cHeight = cy.height();
-  var simulationBounds = bb;
-  var padding = options.padding;
-  var simBBFactor = Math.max( 1, Math.log(nodes.length) * 0.8 );
-
-  if( nodes.length < 100 ){
-    simBBFactor /= 2;
-  }
-
-  layout.trigger( {
-    type: 'layoutstart',
-    layout: layout
-  } );
-
-  var simBB = {
-    x1: 0,
-    y1: 0,
-    x2: cWidth * simBBFactor,
-    y2: cHeight * simBBFactor
-  };
-
-  if( simulationBounds ) {
-    simBB.x1 = simulationBounds.x1;
-    simBB.y1 = simulationBounds.y1;
-    simBB.x2 = simulationBounds.x2;
-    simBB.y2 = simulationBounds.y2;
-  }
-
-  simBB.x1 += padding;
-  simBB.y1 += padding;
-  simBB.x2 -= padding;
-  simBB.y2 -= padding;
-
-  var width = simBB.x2 - simBB.x1;
-  var height = simBB.y2 - simBB.y1;
-
-  // Get start time
-  var startTime = Date.now();
-
-  // layout doesn't work with just 1 node
-  if( nodes.size() <= 1 ) {
-    nodes.positions( {
-      x: Math.round( ( simBB.x1 + simBB.x2 ) / 2 ),
-      y: Math.round( ( simBB.y1 + simBB.y2 ) / 2 )
-    } );
-
-    if( options.fit ) {
-      cy.fit( options.padding );
-    }
-
-    // Get end time
-    var endTime = Date.now();
-    console.info( "Layout on " + nodes.size() + " nodes took " + ( endTime - startTime ) + " ms" );
-
-    layout.one( "layoutready", options.ready );
-    layout.trigger( "layoutready" );
-
-    layout.one( "layoutstop", options.stop );
-    layout.trigger( "layoutstop" );
-
-    return;
-  }
-
-  // First I need to create the data structure to pass to the worker
-  var pData = {
-    'width': width,
-    'height': height,
-    'minDist': options.minDist,
-    'expFact': options.expandingFactor,
-    'expIt': 0,
-    'maxExpIt': options.maxExpandIterations,
-    'vertices': [],
-    'edges': [],
-    'startTime': startTime
-  };
-
-  for(var i = nodes.length - 1; i >= 0 ; i--) {
-    var nodeId = nodes[i].id();
-    var pos = nodes[i].position();
-
-    if( options.randomize ){
-      pos = {
-        x: Math.round( simBB.x1 + (simBB.x2 - simBB.x1) * Math.random() ),
-        y: Math.round( simBB.y1 + (simBB.y2 - simBB.y1) * Math.random() )
-      };
-    }
-
-    pData[ 'vertices' ].push( {
-      id: nodeId,
-      x: pos.x,
-      y: pos.y
-    } );
-  };
-
-  for(var i = edges.length - 1; i >= 0; i--) {
-    var srcNodeId = edges[i].source().id();
-    var tgtNodeId = edges[i].target().id();
-    pData[ 'edges' ].push( {
-      src: srcNodeId,
-      tgt: tgtNodeId
-    } );
-  };
-
-  //Decleration
-  var t1 = layout.thread;
-
-  // reuse old thread if possible
-  if( !t1 || t1.stopped() ){
-    t1 = layout.thread = Thread();
-
-    // And to add the required scripts
-    t1.require( Voronoi, 'Voronoi' );
-  }
-
-  function setPositions( pData ){ //console.log('set posns')
-    // First we retrieve the important data
-    // var expandIteration = pData[ 'expIt' ];
-    var dataVertices = pData[ 'vertices' ];
-    var vertices = [];
-    for( var i = 0; i < dataVertices.length; ++i ) {
-      var dv = dataVertices[ i ];
-      vertices[ dv.id ] = {
-        x: dv.x,
-        y: dv.y
-      };
-    }
-    /*
-     * FINALLY:
-     *
-     * We position the nodes based on the calculation
-     */
-    nodes.positions(
-      function( node, i ) {
-        // Perform 2.x and 1.x backwards compatibility check
-        if( typeof node === "number" ){
-          node = i;
-        }
-        var id = node.id()
-        var vertex = vertices[ id ];
-
-        return {
-          x: Math.round( simBB.x1 + vertex.x ),
-          y: Math.round( simBB.y1 + vertex.y )
-        };
-      } );
-
-    if( options.fit ) {
-      cy.fit( options.padding );
-    }
-  }
-
-  var didLayoutReady = false;
-  t1.on('message', function(e){
-    var pData = e.message; //console.log('message', e)
-
-    if( !options.animate ){
-      return;
-    }
-
-    setPositions( pData );
-
-    if( !didLayoutReady ){
-      layout.trigger( "layoutready" );
-
-      didLayoutReady = true;
-    }
-  });
-
-  layout.one( "layoutready", options.ready );
-
-  if( options.prelayout ){
-    var prelayout = cy.makeLayout( options.prelayout );
-    var promise = prelayout.promiseOn('layoutstop');
-
-    promise.then( runVoronoi );
-
-    prelayout.run();
-  } else {
-    runVoronoi();
-  }
-
-  function runVoronoi(){
-    t1.pass( pData ).run( function( pData ) {
-
-      function cellCentroid( cell ) {
-        var hes = cell.halfedges;
-        var area = 0,
-          x = 0,
-          y = 0;
-        var p1, p2, f;
-
-        for( var i = 0; i < hes.length; ++i ) {
-          p1 = hes[ i ].getEndpoint();
-          p2 = hes[ i ].getStartpoint();
-
-          area += p1.x * p2.y;
-          area -= p1.y * p2.x;
-
-          f = p1.x * p2.y - p2.x * p1.y;
-          x += ( p1.x + p2.x ) * f;
-          y += ( p1.y + p2.y ) * f;
-        }
-
-        area /= 2;
-        f = area * 6;
-        return {
-          x: x / f,
-          y: y / f
-        };
-      }
-
-      function sitesDistance( ls, rs ) {
-        var dx = ls.x - rs.x;
-        var dy = ls.y - rs.y;
-        return Math.sqrt( dx * dx + dy * dy );
-      }
-
-      Voronoi = _ref_('Voronoi');
-
-      // I need to retrieve the important data
-      var lWidth = pData[ 'width' ];
-      var lHeight = pData[ 'height' ];
-      var lMinDist = pData[ 'minDist' ];
-      var lExpFact = pData[ 'expFact' ];
-      var lMaxExpIt = pData[ 'maxExpIt' ];
-
-      // Prepare the data to output
-      var savePositions = function(){
-        pData[ 'width' ] = lWidth;
-        pData[ 'height' ] = lHeight;
-        pData[ 'expIt' ] = expandIteration;
-        pData[ 'expFact' ] = lExpFact;
-
-        pData[ 'vertices' ] = [];
-        for( var i = 0; i < fv.length; ++i ) {
-          pData[ 'vertices' ].push( {
-            id: fv[ i ].label,
-            x: fv[ i ].x,
-            y: fv[ i ].y
-          } );
-        }
-      };
-
-      var messagePositions = function(){
-        broadcast( pData );
-      };
-
-      var dataVertices = pData[ 'vertices' ];
-      var dataEdges = pData[ 'edges' ];
-
-      var x1 = Infinity;
-      var x2 = -Infinity;
-      var y1 = Infinity;
-      var y2 = -Infinity;
-
-      dataVertices.forEach(function(v){
-        x1 = Math.min( v.x, x1 );
-        x2 = Math.max( v.x, x2 );
-        y1 = Math.min( v.y, y1 );
-        y2 = Math.max( v.y, y2 );
-      });
-
-      var scale = function(x, minX, maxX, scaledMinX, scaledMaxX){
-        var p = (x - minX) / (maxX - minX);
-
-        if( isNaN(p) ){
-          p = Math.random();
-        }
-
-        return scaledMinX + (scaledMaxX - scaledMinX) * p;
-      };
-
-      // NB Voronoi expects all nodes to be on { x in [0, lWidth], y in [0, lHeight] }
-      var fv = dataVertices.map(function(v){
-        return {
-          label: v.id,
-          x: scale( v.x, x1, x2, 0, lWidth ),
-          y: scale( v.y, y1, y2, 0, lHeight )
-        };
-      });
-
-      savePositions();
-      messagePositions();
-
-      if( lMaxExpIt <= 0 ){
-        return pData;
-      }
-
-      /*
-       * SECOND STEP: Tiding up of the graph.
-       *
-       * We use the method described by Gansner and North, based on Voronoi
-       * diagrams.
-       *
-       * Ref: doi:10.1007/3-540-37623-2_28
-       */
-
-      // We calculate the Voronoi diagram dor the position of the nodes
-      var voronoi = new Voronoi();
-      var bbox = {
-        xl: 0,
-        xr: lWidth,
-        yt: 0,
-        yb: lHeight
-      };
-      var vSites = [];
-      for( var i = 0; i < fv.length; ++i ) {
-        vSites[ fv[ i ].label ] = fv[ i ];
-      }
-
-      function checkMinDist( ee ) {
-        var infractions = 0;
-        // Then we check if the minimum distance is satisfied
-        for( var eei = 0; eei < ee.length; ++eei ) {
-          var e = ee[ eei ];
-          if( ( e.lSite != null ) && ( e.rSite != null ) && sitesDistance( e.lSite, e.rSite ) < lMinDist ) {
-            ++infractions;
-          }
-        }
-        return infractions;
-      }
-
-      var diagram = voronoi.compute( fv, bbox );
-
-      // Then we reposition the nodes at the centroid of their Voronoi cells
-      var cells = diagram.cells;
-      for( var i = 0; i < cells.length; ++i ) {
-        var cell = cells[ i ];
-        var site = cell.site;
-        var centroid = cellCentroid( cell );
-        var currv = vSites[ site.label ];
-        currv.x = centroid.x;
-        currv.y = centroid.y;
-      }
-
-      if( lExpFact < 0.0 ) {
-        // Calculates the expanding factor
-        lExpFact = Math.max( 0.05, Math.min( 0.10, lMinDist / Math.sqrt( ( lWidth * lHeight ) / fv.length ) * 0.5 ) );
-        //console.info("Expanding factor is " + (options.expandingFactor * 100.0) + "%");
-      }
-
-      var prevInfractions = checkMinDist( diagram.edges );
-      //console.info("Initial infractions " + prevInfractions);
-
-      var bStop = ( prevInfractions <= 0 ) || lMaxExpIt <= 0;
-
-      var voronoiIteration = 0;
-      var expandIteration = 0;
-
-      // var initWidth = lWidth;
-
-      while( !bStop ) {
-        ++voronoiIteration;
-        for( var it = 0; it <= 4; ++it ) {
-          voronoi.recycle( diagram );
-          diagram = voronoi.compute( fv, bbox );
-
-          // Then we reposition the nodes at the centroid of their Voronoi cells
-          // cells = diagram.cells;
-          for( var i = 0; i < cells.length; ++i ) {
-            var cell = cells[ i ];
-            var site = cell.site;
-            var centroid = cellCentroid( cell );
-            var currv = vSites[ site.label ];
-            currv.x = centroid.x;
-            currv.y = centroid.y;
-          }
-        }
-
-        var currInfractions = checkMinDist( diagram.edges );
-        //console.info("Current infractions " + currInfractions);
-
-        if( currInfractions <= 0 ) {
-          bStop = true;
-        } else {
-          if( currInfractions >= prevInfractions || voronoiIteration >= 4 ) {
-            if( expandIteration >= lMaxExpIt ) {
-              bStop = true;
-            } else {
-              lWidth += lWidth * lExpFact;
-              lHeight += lHeight * lExpFact;
-              bbox = {
-                xl: 0,
-                xr: lWidth,
-                yt: 0,
-                yb: lHeight
-              };
-              ++expandIteration;
-              voronoiIteration = 0;
-              //console.info("Expanded to ("+width+","+height+")");
-            }
-          }
-        }
-        prevInfractions = currInfractions;
-
-        savePositions();
-        messagePositions();
-      }
-
-      savePositions();
-      return pData;
-
-    } ).then( function( pData ) {
-      // var expandIteration = pData[ 'expIt' ];
-      var dataVertices = pData[ 'vertices' ];
-
-      setPositions( pData );
-
-      // Get end time
-      var startTime = pData[ 'startTime' ];
-      var endTime = new Date();
-      console.info( "Layout on " + dataVertices.length + " nodes took " + ( endTime - startTime ) + " ms" );
-
-      layout.one( "layoutstop", options.stop );
-
-      if( !options.animate ){
-        layout.trigger( "layoutready" );
-      }
-
-      layout.trigger( "layoutstop" );
-
-      t1.stop();
-    } );
-  }
-
-
-  return this;
-}; // run
-
-SpreadLayout.prototype.stop = function(){
-  if( this.thread ){
-    this.thread.stop();
-  }
-
-  this.trigger('layoutstop');
-};
-
-SpreadLayout.prototype.destroy = function(){
-  if( this.thread ){
-    this.thread.stop();
-  }
-};
-
-module.exports = SpreadLayout;
-
+module.exports = __WEBPACK_EXTERNAL_MODULE_0__;
 
 /***/ }),
 /* 1 */
@@ -666,1751 +179,1561 @@ module.exports = SpreadLayout;
 "use strict";
 
 
-// registers the extension on a cytoscape lib ref
-var Layout = __webpack_require__(0);
+/**
+ * This class implements data and functionality required for AVSDF layout per
+ * circle.
+ *
+ *
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
 
-var register = function( cytoscape ){
-  cytoscape('layout', 'spread', Layout);
+var LGraph = __webpack_require__(0).LGraph;
+
+// -----------------------------------------------------------------------------
+// Section: Initializations
+// -----------------------------------------------------------------------------
+
+function AVSDFCircle(parent, graphMgr, vObject) {
+    LGraph.call(this, parent, graphMgr, vObject);
+    this.inOrder = undefined;
+    this.currentIndex = 0;
+    this.nodeSeparation = undefined;
+    this.stack = [];
+    this.perimeter = 0;
+    this.centerX = 0;
+    this.centerY = 0;
+    this.radius = 0;
+}
+
+AVSDFCircle.prototype = Object.create(LGraph.prototype);
+
+for (var property in LGraph) {
+    AVSDFCircle[property] = LGraph[property];
+}
+
+AVSDFCircle.prototype.initOrdering = function () {
+    this.inOrder = [];
 };
 
-if( typeof cytoscape !== 'undefined' ){ // expose to global cytoscape (i.e. window.cytoscape)
-  register( cytoscape );
+// -----------------------------------------------------------------------------
+// Section: Accessor Functions
+// -----------------------------------------------------------------------------
+
+// This function returns the array in which the nodes of this circle are kept in order.
+AVSDFCircle.prototype.getOrder = function () {
+    return this.inOrder;
+};
+
+// This function returns the x-coordinate of the center of this circle.
+AVSDFCircle.prototype.getCenterX = function () {
+    return this.centerX;
+};
+
+// This function returns the y-coordinate of the center of this circle.
+AVSDFCircle.prototype.getCenterY = function () {
+    return this.centerY;
+};
+
+// This function returns the radius of this circle.
+AVSDFCircle.prototype.getRadius = function () {
+    return this.radius;
+};
+
+// This function returns the total number of vertices of this circle.
+AVSDFCircle.prototype.getSize = function () {
+    return this.getNodes().length;
+};
+
+// This function calculates and returns the total number of crossings in this
+// circle by adding up the crossing number of individual nodes on it.
+AVSDFCircle.prototype.getTotalCrossingOfCircle = function () {
+    var self = this;
+    var crossingNumber = 0;
+
+    for (var node in self.inOrder) {
+        var nodeCrossing = node.getTotalCrossingOfEdges();
+        if (nodeCrossing === -1) {
+            return -1;
+        }
+        crossingNumber += nodeCrossing;
+    }
+
+    return crossingNumber / 4;
+};
+
+// This function checks whether or not all of the vertices of this circle are
+// assigned an index on the circle.
+AVSDFCircle.prototype.hasFinishedOrdering = function () {
+    return this.currentIndex === this.getNodes().length;
+};
+
+// This function returns the node separation of this circle.
+AVSDFCircle.prototype.getNodeSeparation = function () {
+    return this.nodeSeparation;
+};
+
+// This function sets the node separation of this circle.
+AVSDFCircle.prototype.setNodeSeparation = function (nodeSeparation) {
+    this.nodeSeparation = nodeSeparation;
+};
+
+// -----------------------------------------------------------------------------
+// Section: Remaining Functions
+// -----------------------------------------------------------------------------
+
+// This function traverses the vertices of this circle and corrects the angle
+// of the vertices with respect to their circle indices.
+AVSDFCircle.prototype.correctAngles = function () {
+    var self = this;
+    self.currentIndex = 0;
+
+    self.inOrder.forEach(function (node) {
+        return self.putInOrder(node);
+    });
+};
+
+// This function puts the given node on the circle in the current order and
+// sets its angle appropriately.
+AVSDFCircle.prototype.putInOrder = function (node) {
+    var self = this;
+
+    var nodes = self.getNodes();
+
+    // Note that id attribute of a node is added before
+    // AVSDFLayout is called
+    var found = false;
+    for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].id == node.id) {
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        throw "The node must be a member of LGraph";
+    }
+
+    self.inOrder[self.currentIndex] = node;
+    node.setIndex(self.currentIndex);
+
+    if (self.currentIndex === 0) {
+        node.setAngle(0.0);
+    } else {
+        node.setAngle(self.inOrder[self.currentIndex - 1].getAngle() + 2 * Math.PI * (node.getDiagonal() / 2 + self.nodeSeparation + self.inOrder[self.currentIndex - 1].getDiagonal() / 2) / self.perimeter);
+    }
+
+    self.currentIndex++;
+};
+
+// This function returns the next node to be placed on this circle with
+// respect to the AVSDF algorithm.
+AVSDFCircle.prototype.findNodeToPlace = function () {
+    var self = this;
+    var sDegreeNode = undefined;
+
+    // Find the smallest degree vertex if the stack is empty
+    if (self.stack.length === 0) {
+        sDegreeNode = self.findUnorderedSmallestDegreeNode();
+    }
+    // Find the first vertex in the stack not yet placed
+    else {
+            var foundUnorderNode = false;
+
+            while (!foundUnorderNode && !(self.stack.length === 0)) {
+                sDegreeNode = self.stack.pop();
+                foundUnorderNode = !sDegreeNode.isOrdered();
+            }
+
+            if (!foundUnorderNode) {
+                sDegreeNode = undefined;
+            }
+        }
+
+    // If no unordered vertex is found in the stack, find one
+    // from the remaining ones
+    if (sDegreeNode === undefined) {
+        sDegreeNode = self.findUnorderedSmallestDegreeNode();
+    }
+
+    // Add the unordered neighbors of this node to the stack
+    if (sDegreeNode !== undefined) {
+        var neighbors = sDegreeNode.getNeighborsSortedByDegree();
+
+        for (var i = neighbors.length - 1; i >= 0; i--) {
+            var neighbor = neighbors[i];
+
+            if (!neighbor.isOrdered()) // Check here for possible error
+                {
+                    self.stack.push(neighbor);
+                }
+        }
+    }
+
+    return sDegreeNode;
+};
+
+// This function calculates the radius of this circle with respect to the sizes
+// of the vertices and the node separation parameter.
+AVSDFCircle.prototype.calculateRadius = function () {
+    var self = this;
+    var totalDiagonal = 0;
+
+    self.getNodes().forEach(function (node) {
+        return totalDiagonal += Math.sqrt(node.getWidth() * node.getWidth() + node.getHeight() * node.getHeight());
+    });
+
+    self.perimeter = totalDiagonal + self.getNodes().length * self.nodeSeparation;
+    var radius = self.perimeter / (2 * Math.PI);
+
+    // Check here for possible error
+
+    self.getParent().setWidth(2 * radius);
+    self.getParent().setHeight(2 * radius);
+    self.getParent().setCenter(self.getParent().getWidth(), self.getParent().getHeight());
+
+    self.centerX = self.getParent().getCenterX();
+    self.centerY = self.getParent().getCenterY();
+    self.radius = self.getParent().getHeight() / 2;
+};
+
+// This function calculates the total number of crossings of all vertices of
+// this circle.
+AVSDFCircle.prototype.calculateEdgeCrossingsOfNodes = function () {
+    this.getNodes().forEach(function (node) {
+        return node.calculateTotalCrossing();
+    });
+};
+
+// This function sets the index of each vertex to its position in inOrder
+// array. Note that index of a node can be different from its place in the
+// array due to crossing reduction phase of the AVSDF algorithm. It loads
+// old index values to vertices due to an increase in the number of
+// crossings with the new indices.
+AVSDFCircle.prototype.loadOldIndicesOfNodes = function () {
+    //this.inOrder.forEach( (node,index) => node.setIndex(index));
+    var self = this;
+    for (var i = 0; i < this.inOrder.length; i++) {
+        self.inOrder[i].setIndex(i);
+    }
+};
+
+// This function sets the position of each node in inOrder array to its index.
+// Note that index of a node can be different from its place in the inOrder
+// array due to crossing reduction phase of the AVSDF algorithm. This function
+// puts the nodes to their new index values in inOrder array due to a
+// decrease in the number of crossings with the new indices.
+AVSDFCircle.prototype.reOrderVertices = function () {
+    var self = this;
+    this.getNodes().forEach(function (node) {
+        return self.inOrder[node.getIndex()] = node;
+    });
+};
+
+// This function finds and returns the unordered smallest degree vertex on
+// this circle.
+AVSDFCircle.prototype.findUnorderedSmallestDegreeNode = function () {
+    var minDegree = Number.MAX_SAFE_INTEGER;
+    var sDegreeNode = void 0;
+
+    this.getNodes().forEach(function (node) {
+        if (node.getDegree() < minDegree && !node.isOrdered()) {
+            minDegree = node.getDegree();
+            sDegreeNode = node;
+        }
+    });
+
+    return sDegreeNode;
+};
+
+module.exports = AVSDFCircle;
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LayoutConstants = __webpack_require__(0).LayoutConstants;
+
+function AVSDFConstants() {}
+
+// AVSDFConstants inherits properties in LayoutConstants
+for (var prop in LayoutConstants) {
+    AVSDFConstants[prop] = LayoutConstants[prop];
+}
+
+AVSDFConstants.DEFAULT_NODE_SEPARATION = 60;
+
+module.exports = AVSDFConstants;
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * This class implements data and functionality required for AVSDF layout per
+ * edge.
+ *
+
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
+
+var LEdge = __webpack_require__(0).LEdge;
+
+// -----------------------------------------------------------------------------
+// Section: Initializations
+// -----------------------------------------------------------------------------
+
+function AVSDFEdge(source, target, vEdge) {
+    LEdge.call(this, source, target, vEdge);
+}
+
+AVSDFEdge.prototype = Object.create(LEdge.prototype);
+
+for (var properties in LEdge) {
+    AVSDFEdge[properties] = LEdge[properties];
+}
+
+// -----------------------------------------------------------------------------
+// Section: Accessor Functions
+// -----------------------------------------------------------------------------
+
+// The function getOtherEnd returns the other end of this edge.
+AVSDFEdge.prototype.getOtherEnd = function (node) {
+    return LEdge.prototype.getOtherEnd(node);
+};
+
+// -----------------------------------------------------------------------------
+// Section: Remaining Functions
+// -----------------------------------------------------------------------------
+
+// This function checks whether this edge crosses with the input edge. It
+// returns false, if any of the vertices those edges are incident to are not
+// yet placed on the circle.
+AVSDFEdge.prototype.crossesWithEdge = function (otherEdge) {
+    var self = this;
+    var sourcePos = self.getSource().getIndex();
+    var targetPos = self.getTarget().getIndex();
+    var otherSourcePos = otherEdge.getSource().getIndex();
+    var otherTargetPos = otherEdge.getTarget().getIndex();
+
+    // if any of the vertices those two edges are not yet placed
+    if (sourcePos === -1 || targetPos === -1 || otherSourcePos === -1 || otherTargetPos === -1) {
+        return false;
+    }
+
+    var otherSourceDist = otherEdge.getSource().getCircDistWithTheNode(self.getSource());
+    var otherTargetDist = otherEdge.getTarget().getCircDistWithTheNode(self.getSource());
+    var thisTargetDist = self.getTarget().getCircDistWithTheNode(self.getSource());
+
+    if (thisTargetDist < Math.max(otherSourceDist, otherTargetDist) && thisTargetDist > Math.min(otherSourceDist, otherTargetDist) && otherTargetDist !== 0 && otherSourceDist !== 0) {
+        return true;
+    }
+
+    return false;
+};
+
+// This function returns 1 if this edge crosses with the input edge, 0
+// otherwise.
+AVSDFEdge.prototype.crossingWithEdge = function (otherEdge) {
+    var self = this;
+    var result = self.crossesWithEdge(otherEdge);
+
+    return result ? 1 : 0;
+};
+
+// This function calculates the total number of crossings of this edge with
+// all the edges given in the input list.
+AVSDFEdge.prototype.calculateTotalCrossingWithList = function (edgeList) {
+    var self = this;
+    var totalCrossing = 0;
+
+    edgeList.forEach(function (edge) {
+        return totalCrossing += self.crossingWithEdge(edge);
+    });
+
+    return totalCrossing;
+};
+
+module.exports = AVSDFEdge;
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * This class implements data and functionality required for AVSDF layout per
+ * node.
+ *
+ *
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
+
+var LNode = __webpack_require__(0).LNode;
+var Quicksort = __webpack_require__(0).Quicksort;
+
+// -----------------------------------------------------------------------------
+// Section: Initializations
+// -----------------------------------------------------------------------------
+
+function AVSDFNode(gm, vNode, loc, size) {
+    // Constructor 1: AVSDFNode(gm, vNode, loc, size)
+    if (loc !== undefined && size !== undefined) {
+        LNode.call(this, gm, vNode, loc, size);
+    }
+    // Constructor 2: AVSDFNode(gm, vNode)
+    else {
+            LNode.call(this, gm, vNode);
+        }
+
+    // Angle of this node on the owner circle in radians
+    this.angle = 0;
+
+    // Index of this node on the owner circle
+    this.circleIndex = -1;
+
+    // Total number of crossings of the edges this node is incident to
+    this.totalCrossingOfEdges = -1;
+
+    // Whether the current edge crossing number is valid or it needs to be
+    // recalculated
+    this.isCrossingNumberValid = false;
+}
+
+AVSDFNode.prototype = Object.create(LNode.prototype);
+for (var properties in LNode) {
+    AVSDFNode[properties] = LNode[properties];
+}
+
+// -----------------------------------------------------------------------------
+// Section: Accessor Functions
+// -----------------------------------------------------------------------------
+
+// This function returns the circle this node is owned by.
+AVSDFNode.prototype.getCircle = function () {
+    return this.getOwner();
+};
+
+// This function sets the index of this node on the circle, and sets the
+// crossing number invalid. Due to the index change of the node; it needs to
+// be recalculated.
+AVSDFNode.prototype.setIndex = function (index) {
+    this.circleIndex = index;
+    this.isCrossingNumberValid = false;
+};
+
+// This function returns the index of this node in the ordering of its owner
+// circle. Here -1 means that the vertex is not yet placed on its owner
+//circle.
+AVSDFNode.prototype.getIndex = function () {
+    return this.circleIndex;
+};
+
+// This function returns the array of the neigbors of this node sorted in
+// ascending order.
+AVSDFNode.prototype.getNeighborsSortedByDegree = function () {
+    var self = this;
+
+    var result = Array.from(self.getNeighborsList());
+    result = result.filter(function (node) {
+        return node.getIndex() === -1;
+    });
+
+    result.sort(function (a, b) {
+        return a.getDegree() - b.getDegree();
+    });
+
+    return result;
+};
+
+// This function returns the degree of this node.
+AVSDFNode.prototype.getDegree = function () {
+    return this.getEdges().length;
+};
+
+// This function returns whether or not this node is currently placed on its
+// owner circle.
+AVSDFNode.prototype.isOrdered = function () {
+    return this.getIndex() > -1;
+};
+
+// This function sets the angle of this node w.r.t. its owner circle. Here
+// the angle value is in radian.
+AVSDFNode.prototype.setAngle = function (angle) {
+    this.angle = angle;
+};
+
+// This function returns the angle of this node w.r.t. its owner circle. Here
+// the angle value is in radian.
+AVSDFNode.prototype.getAngle = function () {
+    return this.angle;
+};
+
+// This function returns the index difference of this node with the input
+// node. Note that the index difference cannot be negative if both nodes are
+// placed on the circle. Here -1 means at least one of the nodes are not yet
+// placed on the circle.
+AVSDFNode.prototype.getCircDistWithTheNode = function (refNode) {
+    var self = this;
+    var otherIndex = refNode.getIndex();
+
+    if (otherIndex === -1 || self.getIndex() === -1) {
+        return -1;
+    }
+
+    var diff = self.getIndex() - otherIndex;
+
+    if (diff < 0) {
+        diff += self.getCircle().getSize();
+    }
+
+    return diff;
+};
+
+// This function finds the number of edge crossings between the edges of
+// this node and the edges of the input one.
+AVSDFNode.prototype.getCrossingNumberWithNode = function (otherNode) {
+    var self = this;
+    var totalCrossing = 0;
+
+    self.getEdges().forEach(function (edge) {
+        otherNode.getEdges().forEach(function (otherEdge) {
+            totalCrossing += edge.crossingWithEdge(otherEdge);
+        });
+    });
+
+    return totalCrossing;
+};
+
+// This function returns the total number of edge crossings. If the previously
+// calculated value is not valid due to an index change on the circle, then
+// a recalculation is performed.
+AVSDFNode.prototype.getTotalCrossingOfEdges = function () {
+    var self = this;
+
+    if (!self.isCrossingNumberValid) {
+        self.calculateTotalCrossing();
+        self.isCrossingNumberValid = true;
+    }
+
+    return self.totalCrossingOfEdges;
+};
+
+// -----------------------------------------------------------------------------
+// Section: Remaining Functions
+// -----------------------------------------------------------------------------
+
+// This function calculates the total number of crossings the edges of this
+// node cause.
+AVSDFNode.prototype.calculateTotalCrossing = function () {
+    var self = this;
+    var temp_crossing_count = 0;
+    var temp_edge_list = [];
+    temp_edge_list.push.apply(temp_edge_list, self.getCircle().getEdges());
+    temp_edge_list = temp_edge_list.filter(function (ele) {
+        return self.getEdges().indexOf(ele) < 0;
+    });
+
+    self.getEdges().forEach(function (edge) {
+        return temp_crossing_count += edge.calculateTotalCrossingWithList(temp_edge_list);
+    });
+
+    self.totalCrossingOfEdges = temp_crossing_count;
+};
+
+module.exports = AVSDFNode;
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * This class implements the overall layout process for the AVSDF algorithm
+ * (Circular Drawing Algorithm by He and Sykora).
+ *
+ *
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
+
+var Layout = __webpack_require__(0).Layout;
+var AVSDFConstants = __webpack_require__(2);
+var AVSDFCircle = __webpack_require__(1);
+var AVSDFNode = __webpack_require__(4);
+var AVSDFEdge = __webpack_require__(3);
+
+// -----------------------------------------------------------------------------
+// Section: Initializations
+// -----------------------------------------------------------------------------
+
+// Constructor
+function AVSDFLayout() {
+    Layout.call(this);
+    this.nodeSeparation = AVSDFConstants.DEFAULT_NODE_SEPARATION;
+}
+
+AVSDFLayout.prototype = Object.create(Layout.prototype);
+
+for (var property in Layout) {
+    AVSDFLayout[property] = Layout[property];
+}
+
+AVSDFLayout.prototype.newGraph = function (vObject) {
+    this.avsdfCircle = new AVSDFCircle(null, this.graphManager, vObject);
+
+    return this.avsdfCircle;
+};
+
+AVSDFLayout.prototype.newNode = function (vNode) {
+    return new AVSDFNode(this.graphManager, vNode);
+};
+
+AVSDFLayout.prototype.newEdge = function (vEdge) {
+    return new AVSDFEdge(null, null, vEdge);
+};
+
+// -----------------------------------------------------------------------------
+// Section: Accessor Functions
+// -----------------------------------------------------------------------------
+
+// This function returns the position data for all nodes
+AVSDFLayout.prototype.getPositionsData = function () {
+    var allNodes = this.graphManager.getAllNodes();
+    var pData = {};
+
+    for (var i = 0; i < allNodes.length; i++) {
+        var rect = allNodes[i].rect;
+        var id = allNodes[i].id;
+
+        pData[id] = {
+            id: id,
+            x: rect.getCenterX(),
+            y: rect.getCenterY(),
+            w: rect.width,
+            h: rect.height
+        };
+    }
+
+    return pData;
+};
+
+// -----------------------------------------------------------------------------
+// Section: Layout Related
+// -----------------------------------------------------------------------------
+
+/**
+ * This function performs layout on constructed l-level graph.
+ * It returns true on success, false otherwise.
+ * Important!: If you want to see the results of this function then, after this function is called, you have to calculate
+ * and set the positions of every node. To do this call updateNodeCoordinates. However, updateNodeAngles on the other
+ * hand is not needed (redundant) for this function.
+ */
+AVSDFLayout.prototype.layout = function () {
+    var self = this;
+
+    // Check if graph contains any compound structures
+    if (self.graphManager.getGraphs().length > 1) {
+        return false;
+    }
+
+    var clusterGraph = this.avsdfCircle; // Fixed reference, but now it is a bit redundant
+
+    clusterGraph.setNodeSeparation(this.nodeSeparation);
+    clusterGraph.calculateRadius();
+    clusterGraph.initOrdering();
+
+    while (!clusterGraph.hasFinishedOrdering()) {
+        var node = clusterGraph.findNodeToPlace();
+        clusterGraph.putInOrder(node);
+    }
+
+    return true;
+};
+
+// This function updates the angle (in radians) property of AVSDFNode elements in the circle
+AVSDFLayout.prototype.updateNodeAngles = function () {
+    this.graphManager.getRoot().correctAngles(); //AVSDFCircle object
+};
+
+// This function traverses the vertices of the graph and sets their correct coordinates with respect to the owner circle.
+AVSDFLayout.prototype.updateNodeCoordinates = function () {
+    var clusterGraph = this.graphManager.getRoot();
+
+    clusterGraph.getNodes().forEach(function (node) {
+        node.setCenter(clusterGraph.getCenterX() + clusterGraph.getRadius() * Math.cos(node.getAngle()), clusterGraph.getCenterY() + clusterGraph.getRadius() * Math.sin(node.getAngle()));
+    });
+};
+
+// -----------------------------------------------------------------------------
+// Section: Post Processing
+// -----------------------------------------------------------------------------
+
+/**
+ * This method implements the post processing step of the algorithm, which
+ * tries to minimize the number of edges further with respect to the local
+ * adjusting algorithm described by He and Sykora.
+ */
+AVSDFLayout.prototype.initPostProcess = function () {
+    this.avsdfCircle.calculateEdgeCrossingsOfNodes();
+
+    var list = this.avsdfCircle.getNodes();
+
+    list.sort(function (a, b) {
+        return b.getTotalCrossingOfEdges() - a.getTotalCrossingOfEdges();
+    });
+
+    return list;
+};
+
+AVSDFLayout.prototype.oneStepPostProcess = function (node) {
+    var self = this;
+
+    var currentCrossingNumber = node.getTotalCrossingOfEdges();
+    var newCrossingNumber = void 0;
+
+    var neighbours = Array.from(node.getNeighborsList());
+
+    for (var j = 0; j < neighbours.length; j++) {
+        var neighbour = neighbours[j];
+
+        var oldIndex = node.getIndex();
+        var newIndex = (neighbour.getIndex() + 1) % self.avsdfCircle.getSize();
+
+        if (oldIndex !== newIndex) {
+            node.setIndex(newIndex);
+
+            if (oldIndex < node.getIndex()) {
+                oldIndex += self.avsdfCircle.getSize();
+            }
+
+            var index = node.getIndex();
+
+            while (index < oldIndex) {
+                var temp = self.avsdfCircle.getOrder()[index % self.avsdfCircle.getSize()];
+                temp.setIndex((temp.getIndex() + 1) % self.avsdfCircle.getSize());
+                index += 1;
+            }
+
+            node.calculateTotalCrossing();
+            newCrossingNumber = node.getTotalCrossingOfEdges();
+
+            if (newCrossingNumber >= currentCrossingNumber) {
+                self.avsdfCircle.loadOldIndicesOfNodes();
+            } else {
+                self.avsdfCircle.reOrderVertices();
+                currentCrossingNumber = newCrossingNumber;
+            }
+        }
+    }
+};
+
+module.exports = AVSDFLayout;
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var avsdfBase = {};
+
+avsdfBase.layoutBase = __webpack_require__(0);
+avsdfBase.AVSDFConstants = __webpack_require__(2);
+avsdfBase.AVSDFEdge = __webpack_require__(3);
+avsdfBase.AVSDFCircle = __webpack_require__(1);
+avsdfBase.AVSDFLayout = __webpack_require__(5);
+avsdfBase.AVSDFNode = __webpack_require__(4);
+
+module.exports = avsdfBase;
+
+/***/ })
+/******/ ]);
+});
+
+/***/ }),
+
+/***/ "../node_modules/cytoscape-avsdf/cytoscape-avsdf.js":
+/*!**********************************************************!*\
+  !*** ../node_modules/cytoscape-avsdf/cytoscape-avsdf.js ***!
+  \**********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(true)
+		module.exports = factory(__webpack_require__(/*! avsdf-base */ "../node_modules/avsdf-base/avsdf-base.js"));
+	else {}
+})(this, function(__WEBPACK_EXTERNAL_MODULE_0__) {
+return /******/ (function(modules) { // webpackBootstrap
+/******/ 	// The module cache
+/******/ 	var installedModules = {};
+/******/
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/
+/******/ 		// Check if module is in cache
+/******/ 		if(installedModules[moduleId]) {
+/******/ 			return installedModules[moduleId].exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = installedModules[moduleId] = {
+/******/ 			i: moduleId,
+/******/ 			l: false,
+/******/ 			exports: {}
+/******/ 		};
+/******/
+/******/ 		// Execute the module function
+/******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/
+/******/ 		// Flag the module as loaded
+/******/ 		module.l = true;
+/******/
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/
+/******/
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = modules;
+/******/
+/******/ 	// expose the module cache
+/******/ 	__webpack_require__.c = installedModules;
+/******/
+/******/ 	// identity function for calling harmony imports with the correct context
+/******/ 	__webpack_require__.i = function(value) { return value; };
+/******/
+/******/ 	// define getter function for harmony exports
+/******/ 	__webpack_require__.d = function(exports, name, getter) {
+/******/ 		if(!__webpack_require__.o(exports, name)) {
+/******/ 			Object.defineProperty(exports, name, {
+/******/ 				configurable: false,
+/******/ 				enumerable: true,
+/******/ 				get: getter
+/******/ 			});
+/******/ 		}
+/******/ 	};
+/******/
+/******/ 	// getDefaultExport function for compatibility with non-harmony modules
+/******/ 	__webpack_require__.n = function(module) {
+/******/ 		var getter = module && module.__esModule ?
+/******/ 			function getDefault() { return module['default']; } :
+/******/ 			function getModuleExports() { return module; };
+/******/ 		__webpack_require__.d(getter, 'a', getter);
+/******/ 		return getter;
+/******/ 	};
+/******/
+/******/ 	// Object.prototype.hasOwnProperty.call
+/******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+/******/
+/******/ 	// __webpack_public_path__
+/******/ 	__webpack_require__.p = "";
+/******/
+/******/ 	// Load entry module and return exports
+/******/ 	return __webpack_require__(__webpack_require__.s = 3);
+/******/ })
+/************************************************************************/
+/******/ ([
+/* 0 */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_0__;
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+// Simple, internal Object.assign() polyfill for options objects etc.
+
+module.exports = Object.assign != null ? Object.assign.bind(Object) : function (tgt) {
+  for (var _len = arguments.length, srcs = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+    srcs[_key - 1] = arguments[_key];
+  }
+
+  srcs.forEach(function (src) {
+    Object.keys(src).forEach(function (k) {
+      return tgt[k] = src[k];
+    });
+  });
+
+  return tgt;
+};
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ *
+ * Choose the type of layout that best suits your usecase as a starting point.
+ *
+ * A discrete layout is one that algorithmically sets resultant positions.  It
+ * does not have intermediate positions.
+ *
+ * A continuous layout is one that updates positions continuously, like a force-
+ * directed / physics simulation layout.
+ */
+
+module.exports = __webpack_require__(4);
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var impl = __webpack_require__(2);
+
+// registers the extension on a cytoscape lib ref
+var register = function register(cytoscape) {
+  if (!cytoscape) {
+    return;
+  } // can't register if cytoscape unspecified
+
+  cytoscape('layout', 'avsdf', impl); // register with cytoscape.js
+};
+
+if (typeof cytoscape !== 'undefined') {
+  // expose to global cytoscape (i.e. window.cytoscape)
+  register(cytoscape);
 }
 
 module.exports = register;
 
-
 /***/ }),
-/* 2 */
-/***/ (function(module, exports) {
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
 
-/*!
-Copyright (C) 2010-2013 Raymond Hill: https://github.com/gorhill/Javascript-Voronoi
-MIT License: See https://github.com/gorhill/Javascript-Voronoi/LICENSE.md
-*/
-/*
-Author: Raymond Hill (rhill@raymondhill.net)
-Contributor: Jesse Morgan (morgajel@gmail.com)
-File: rhill-voronoi-core.js
-Version: 0.98
-Date: January 21, 2013
-Description: This is my personal Javascript implementation of
-Steven Fortune's algorithm to compute Voronoi diagrams.
+"use strict";
 
-License: See https://github.com/gorhill/Javascript-Voronoi/LICENSE.md
-Credits: See https://github.com/gorhill/Javascript-Voronoi/CREDITS.md
-History: See https://github.com/gorhill/Javascript-Voronoi/CHANGELOG.md
 
-## Usage:
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-  var sites = [{x:300,y:300}, {x:100,y:100}, {x:200,y:500}, {x:250,y:450}, {x:600,y:150}];
-  // xl, xr means x left, x right
-  // yt, yb means y top, y bottom
-  var bbox = {xl:0, xr:800, yt:0, yb:600};
-  var voronoi = new Voronoi();
-  // pass an object which exhibits xl, xr, yt, yb properties. The bounding
-  // box will be used to connect unbound edges, and to close open cells
-  result = voronoi.compute(sites, bbox);
-  // render, further analyze, etc.
+var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-Return value:
-  An object with the following properties:
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-  result.vertices = an array of unordered, unique Voronoi.Vertex objects making
-    up the Voronoi diagram.
-  result.edges = an array of unordered, unique Voronoi.Edge objects making up
-    the Voronoi diagram.
-  result.cells = an array of Voronoi.Cell object making up the Voronoi diagram.
-    A Cell object might have an empty array of halfedges, meaning no Voronoi
-    cell could be computed for a particular cell.
-  result.execTime = the time it took to compute the Voronoi diagram, in
-    milliseconds.
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
 
-Voronoi.Vertex object:
-  x: The x position of the vertex.
-  y: The y position of the vertex.
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-Voronoi.Edge object:
-  lSite: the Voronoi site object at the left of this Voronoi.Edge object.
-  rSite: the Voronoi site object at the right of this Voronoi.Edge object (can
-    be null).
-  va: an object with an 'x' and a 'y' property defining the start point
-    (relative to the Voronoi site on the left) of this Voronoi.Edge object.
-  vb: an object with an 'x' and a 'y' property defining the end point
-    (relative to Voronoi site on the left) of this Voronoi.Edge object.
-
-  For edges which are used to close open cells (using the supplied bounding
-  box), the rSite property will be null.
-
-Voronoi.Cell object:
-  site: the Voronoi site object associated with the Voronoi cell.
-  halfedges: an array of Voronoi.Halfedge objects, ordered counterclockwise,
-    defining the polygon for this Voronoi cell.
-
-Voronoi.Halfedge object:
-  site: the Voronoi site object owning this Voronoi.Halfedge object.
-  edge: a reference to the unique Voronoi.Edge object underlying this
-    Voronoi.Halfedge object.
-  getStartpoint(): a method returning an object with an 'x' and a 'y' property
-    for the start point of this halfedge. Keep in mind halfedges are always
-    countercockwise.
-  getEndpoint(): a method returning an object with an 'x' and a 'y' property
-    for the end point of this halfedge. Keep in mind halfedges are always
-    countercockwise.
-
-TODO: Identify opportunities for performance improvement.
-
-TODO: Let the user close the Voronoi cells, do not do it automatically. Not only let
-      him close the cells, but also allow him to close more than once using a different
-      bounding box for the same Voronoi diagram.
+/**
+ * This class implements the overall layout process for the
+ * Adjacent Vertex with Smallest Degree First (AVSDF) algorithm.
+ * (Circular Drawing Algorithm by Hongmei He & Ondrej Sýkora).
+ *
+ * @author Doruk Çakmakçı
+ * @author Alihan Okka
+ *
+ * Copyright: i-Vis (Information Visualization) Research Lab, Bilkent University, 2019 - present
 */
 
-/*global Math */
+// cytosscape.js-avsdf REQUIRES avsdf-base library elements
+var AVSDFLayout = __webpack_require__(0).AVSDFLayout;
+var AVSDFNode = __webpack_require__(0).AVSDFNode;
+var AVSDFConstants = __webpack_require__(0).AVSDFConstants;
+var PointD = __webpack_require__(0).layoutBase.PointD;
+var DimensionD = __webpack_require__(0).layoutBase.DimensionD;
 
-// ---------------------------------------------------------------------------
+// Cytoscape-extention template requirements
+// More details can be found in NPM 'slush-cytoscape-extension' package
+var assign = __webpack_require__(1);
+var ContinuousLayout = __webpack_require__(6);
 
-function Voronoi() {
-    this.vertices = null;
-    this.edges = null;
-    this.cells = null;
-    this.toRecycle = null;
-    this.beachsectionJunkyard = [];
-    this.circleEventJunkyard = [];
-    this.vertexJunkyard = [];
-    this.edgeJunkyard = [];
-    this.cellJunkyard = [];
+var isFn = function isFn(fn) {
+  return typeof fn === 'function';
+};
+var optFn = function optFn(opt, ele) {
+  if (isFn(opt)) {
+    return opt(ele);
+  } else {
+    return opt;
+  }
+};
+
+var defaults = {
+  ready: function ready() {}, // Called on `layoutready`
+  stop: function stop() {}, // Called on `layoutstop`
+  refresh: 30, // number of ticks per frame; higher is faster but more jerky
+  fit: true, // Whether to fit the network view after when done
+  padding: 10, // Padding on fit
+  randomize: false, // Whether to enable incremental mode
+  animate: 'end', // Type of layout animation. The option set is {'during', 'end', false}
+  animationDuration: 500, // Duration for animate:end
+  nodeSeparation: 60 // How apart the nodes are
+};
+
+/**
+ *  This is the main class that does all the functionality.
+ *  The class is utilized by functions in the continuous-base folder.
+ */
+
+var AVSDF = function (_ContinuousLayout) {
+  _inherits(AVSDF, _ContinuousLayout);
+
+  function AVSDF(options) {
+    _classCallCheck(this, AVSDF);
+
+    // Whether node separation value is used
+    var _this = _possibleConstructorReturn(this, (AVSDF.__proto__ || Object.getPrototypeOf(AVSDF)).call(this, assign({}, defaults, options)));
+
+    if (options.nodeSeparation != null) AVSDFConstants.DEFAULT_NODE_SEPARATION = options.nodeSeparation;else AVSDFConstants.DEFAULT_NODE_SEPARATION = defaults.nodeSeparation;
+    return _this;
+  }
+
+  /**
+   *  Initializing AVSDF elements and arranging the nodes of the graph around the circle
+   */
+
+
+  _createClass(AVSDF, [{
+    key: 'prerun',
+    value: function prerun() {
+      var state = this.state; // options object combined with current state
+
+      // Initialize AVSDF elements and their requirements
+      var avsdfLayout = this.avsdfLayout = new AVSDFLayout();
+      var graphManager = this.graphManager = avsdfLayout.newGraphManager();
+      var root = this.root = graphManager.addRoot();
+      var nodes = state.nodes;
+      var edges = state.edges;
+
+      // Getting nodes of cytoscape and converting it to AVSDF structure
+      this.idToLNode = {};
+      this.processChildrenList(root, nodes, avsdfLayout);
+
+      // Getting edges of cytoscape and transfering it to GraphManager
+      for (var i = 0; i < edges.length; i++) {
+        var edge = edges[i];
+        var sourceNode = this.idToLNode[edge.data("source")];
+        var targetNode = this.idToLNode[edge.data("target")];
+        if (sourceNode !== targetNode && sourceNode.getEdgesBetween(targetNode).length === 0) {
+          var e1 = graphManager.add(avsdfLayout.newEdge(), sourceNode, targetNode);
+          e1.id = edge.id();
+        }
+      }
+
+      // Running the AVSDF layout.
+      // Note: This function doesn't do post-processing. Plus, nodes have to be positioned.
+      // See AVSDFLayout for details.
+      avsdfLayout.layout();
+
+      // We need to calculate the initial circle position if we want to render it
+      avsdfLayout.updateNodeCoordinates();
+
+      // Post process is iterated over the sorted list of vertex degrees (descending)
+      this.sortedByDegreeList = avsdfLayout.initPostProcess();
     }
 
-// ---------------------------------------------------------------------------
-
-Voronoi.prototype.reset = function() {
-    if (!this.beachline) {
-        this.beachline = new this.RBTree();
-        }
-    // Move leftover beachsections to the beachsection junkyard.
-    if (this.beachline.root) {
-        var beachsection = this.beachline.getFirst(this.beachline.root);
-        while (beachsection) {
-            this.beachsectionJunkyard.push(beachsection); // mark for reuse
-            beachsection = beachsection.rbNext;
-            }
-        }
-    this.beachline.root = null;
-    if (!this.circleEvents) {
-        this.circleEvents = new this.RBTree();
-        }
-    this.circleEvents.root = this.firstCircleEvent = null;
-    this.vertices = [];
-    this.edges = [];
-    this.cells = [];
-    };
-
-Voronoi.prototype.sqrt = function(n){ return Math.sqrt(n); };
-Voronoi.prototype.abs = function(n){ return Math.abs(n); };
-Voronoi.prototype.ε = Voronoi.ε = 1e-9;
-Voronoi.prototype.invε = Voronoi.invε = 1.0 / Voronoi.ε;
-Voronoi.prototype.equalWithEpsilon = function(a,b){return this.abs(a-b)<1e-9;};
-Voronoi.prototype.greaterThanWithEpsilon = function(a,b){return a-b>1e-9;};
-Voronoi.prototype.greaterThanOrEqualWithEpsilon = function(a,b){return b-a<1e-9;};
-Voronoi.prototype.lessThanWithEpsilon = function(a,b){return b-a>1e-9;};
-Voronoi.prototype.lessThanOrEqualWithEpsilon = function(a,b){return a-b<1e-9;};
-
-// ---------------------------------------------------------------------------
-// Red-Black tree code (based on C version of "rbtree" by Franck Bui-Huu
-// https://github.com/fbuihuu/libtree/blob/master/rb.c
-
-Voronoi.prototype.RBTree = function() {
-    this.root = null;
-    };
-
-Voronoi.prototype.RBTree.prototype.rbInsertSuccessor = function(node, successor) {
-    var parent;
-    if (node) {
-        // >>> rhill 2011-05-27: Performance: cache previous/next nodes
-        successor.rbPrevious = node;
-        successor.rbNext = node.rbNext;
-        if (node.rbNext) {
-            node.rbNext.rbPrevious = successor;
-            }
-        node.rbNext = successor;
-        // <<<
-        if (node.rbRight) {
-            // in-place expansion of node.rbRight.getFirst();
-            node = node.rbRight;
-            while (node.rbLeft) {node = node.rbLeft;}
-            node.rbLeft = successor;
-            }
-        else {
-            node.rbRight = successor;
-            }
-        parent = node;
-        }
-    // rhill 2011-06-07: if node is null, successor must be inserted
-    // to the left-most part of the tree
-    else if (this.root) {
-        node = this.getFirst(this.root);
-        // >>> Performance: cache previous/next nodes
-        successor.rbPrevious = null;
-        successor.rbNext = node;
-        node.rbPrevious = successor;
-        // <<<
-        node.rbLeft = successor;
-        parent = node;
-        }
-    else {
-        // >>> Performance: cache previous/next nodes
-        successor.rbPrevious = successor.rbNext = null;
-        // <<<
-        this.root = successor;
-        parent = null;
-        }
-    successor.rbLeft = successor.rbRight = null;
-    successor.rbParent = parent;
-    successor.rbRed = true;
-    // Fixup the modified tree by recoloring nodes and performing
-    // rotations (2 at most) hence the red-black tree properties are
-    // preserved.
-    var grandpa, uncle;
-    node = successor;
-    while (parent && parent.rbRed) {
-        grandpa = parent.rbParent;
-        if (parent === grandpa.rbLeft) {
-            uncle = grandpa.rbRight;
-            if (uncle && uncle.rbRed) {
-                parent.rbRed = uncle.rbRed = false;
-                grandpa.rbRed = true;
-                node = grandpa;
-                }
-            else {
-                if (node === parent.rbRight) {
-                    this.rbRotateLeft(parent);
-                    node = parent;
-                    parent = node.rbParent;
-                    }
-                parent.rbRed = false;
-                grandpa.rbRed = true;
-                this.rbRotateRight(grandpa);
-                }
-            }
-        else {
-            uncle = grandpa.rbLeft;
-            if (uncle && uncle.rbRed) {
-                parent.rbRed = uncle.rbRed = false;
-                grandpa.rbRed = true;
-                node = grandpa;
-                }
-            else {
-                if (node === parent.rbLeft) {
-                    this.rbRotateRight(parent);
-                    node = parent;
-                    parent = node.rbParent;
-                    }
-                parent.rbRed = false;
-                grandpa.rbRed = true;
-                this.rbRotateLeft(grandpa);
-                }
-            }
-        parent = node.rbParent;
-        }
-    this.root.rbRed = false;
-    };
-
-Voronoi.prototype.RBTree.prototype.rbRemoveNode = function(node) {
-    // >>> rhill 2011-05-27: Performance: cache previous/next nodes
-    if (node.rbNext) {
-        node.rbNext.rbPrevious = node.rbPrevious;
-        }
-    if (node.rbPrevious) {
-        node.rbPrevious.rbNext = node.rbNext;
-        }
-    node.rbNext = node.rbPrevious = null;
-    // <<<
-    var parent = node.rbParent,
-        left = node.rbLeft,
-        right = node.rbRight,
-        next;
-    if (!left) {
-        next = right;
-        }
-    else if (!right) {
-        next = left;
-        }
-    else {
-        next = this.getFirst(right);
-        }
-    if (parent) {
-        if (parent.rbLeft === node) {
-            parent.rbLeft = next;
-            }
-        else {
-            parent.rbRight = next;
-            }
-        }
-    else {
-        this.root = next;
-        }
-    // enforce red-black rules
-    var isRed;
-    if (left && right) {
-        isRed = next.rbRed;
-        next.rbRed = node.rbRed;
-        next.rbLeft = left;
-        left.rbParent = next;
-        if (next !== right) {
-            parent = next.rbParent;
-            next.rbParent = node.rbParent;
-            node = next.rbRight;
-            parent.rbLeft = node;
-            next.rbRight = right;
-            right.rbParent = next;
-            }
-        else {
-            next.rbParent = parent;
-            parent = next;
-            node = next.rbRight;
-            }
-        }
-    else {
-        isRed = node.rbRed;
-        node = next;
-        }
-    // 'node' is now the sole successor's child and 'parent' its
-    // new parent (since the successor can have been moved)
-    if (node) {
-        node.rbParent = parent;
-        }
-    // the 'easy' cases
-    if (isRed) {return;}
-    if (node && node.rbRed) {
-        node.rbRed = false;
-        return;
-        }
-    // the other cases
-    var sibling;
-    do {
-        if (node === this.root) {
-            break;
-            }
-        if (node === parent.rbLeft) {
-            sibling = parent.rbRight;
-            if (sibling.rbRed) {
-                sibling.rbRed = false;
-                parent.rbRed = true;
-                this.rbRotateLeft(parent);
-                sibling = parent.rbRight;
-                }
-            if ((sibling.rbLeft && sibling.rbLeft.rbRed) || (sibling.rbRight && sibling.rbRight.rbRed)) {
-                if (!sibling.rbRight || !sibling.rbRight.rbRed) {
-                    sibling.rbLeft.rbRed = false;
-                    sibling.rbRed = true;
-                    this.rbRotateRight(sibling);
-                    sibling = parent.rbRight;
-                    }
-                sibling.rbRed = parent.rbRed;
-                parent.rbRed = sibling.rbRight.rbRed = false;
-                this.rbRotateLeft(parent);
-                node = this.root;
-                break;
-                }
-            }
-        else {
-            sibling = parent.rbLeft;
-            if (sibling.rbRed) {
-                sibling.rbRed = false;
-                parent.rbRed = true;
-                this.rbRotateRight(parent);
-                sibling = parent.rbLeft;
-                }
-            if ((sibling.rbLeft && sibling.rbLeft.rbRed) || (sibling.rbRight && sibling.rbRight.rbRed)) {
-                if (!sibling.rbLeft || !sibling.rbLeft.rbRed) {
-                    sibling.rbRight.rbRed = false;
-                    sibling.rbRed = true;
-                    this.rbRotateLeft(sibling);
-                    sibling = parent.rbLeft;
-                    }
-                sibling.rbRed = parent.rbRed;
-                parent.rbRed = sibling.rbLeft.rbRed = false;
-                this.rbRotateRight(parent);
-                node = this.root;
-                break;
-                }
-            }
-        sibling.rbRed = true;
-        node = parent;
-        parent = parent.rbParent;
-    } while (!node.rbRed);
-    if (node) {node.rbRed = false;}
-    };
-
-Voronoi.prototype.RBTree.prototype.rbRotateLeft = function(node) {
-    var p = node,
-        q = node.rbRight, // can't be null
-        parent = p.rbParent;
-    if (parent) {
-        if (parent.rbLeft === p) {
-            parent.rbLeft = q;
-            }
-        else {
-            parent.rbRight = q;
-            }
-        }
-    else {
-        this.root = q;
-        }
-    q.rbParent = parent;
-    p.rbParent = q;
-    p.rbRight = q.rbLeft;
-    if (p.rbRight) {
-        p.rbRight.rbParent = p;
-        }
-    q.rbLeft = p;
-    };
-
-Voronoi.prototype.RBTree.prototype.rbRotateRight = function(node) {
-    var p = node,
-        q = node.rbLeft, // can't be null
-        parent = p.rbParent;
-    if (parent) {
-        if (parent.rbLeft === p) {
-            parent.rbLeft = q;
-            }
-        else {
-            parent.rbRight = q;
-            }
-        }
-    else {
-        this.root = q;
-        }
-    q.rbParent = parent;
-    p.rbParent = q;
-    p.rbLeft = q.rbRight;
-    if (p.rbLeft) {
-        p.rbLeft.rbParent = p;
-        }
-    q.rbRight = p;
-    };
-
-Voronoi.prototype.RBTree.prototype.getFirst = function(node) {
-    while (node.rbLeft) {
-        node = node.rbLeft;
-        }
-    return node;
-    };
-
-Voronoi.prototype.RBTree.prototype.getLast = function(node) {
-    while (node.rbRight) {
-        node = node.rbRight;
-        }
-    return node;
-    };
-
-// ---------------------------------------------------------------------------
-// Diagram methods
-
-Voronoi.prototype.Diagram = function(site) {
-    this.site = site;
-    };
-
-// ---------------------------------------------------------------------------
-// Cell methods
-
-Voronoi.prototype.Cell = function(site) {
-    this.site = site;
-    this.halfedges = [];
-    this.closeMe = false;
-    };
-
-Voronoi.prototype.Cell.prototype.init = function(site) {
-    this.site = site;
-    this.halfedges = [];
-    this.closeMe = false;
-    return this;
-    };
-
-Voronoi.prototype.createCell = function(site) {
-    var cell = this.cellJunkyard.pop();
-    if ( cell ) {
-        return cell.init(site);
-        }
-    return new this.Cell(site);
-    };
-
-Voronoi.prototype.Cell.prototype.prepareHalfedges = function() {
-    var halfedges = this.halfedges,
-        iHalfedge = halfedges.length,
-        edge;
-    // get rid of unused halfedges
-    // rhill 2011-05-27: Keep it simple, no point here in trying
-    // to be fancy: dangling edges are a typically a minority.
-    while (iHalfedge--) {
-        edge = halfedges[iHalfedge].edge;
-        if (!edge.vb || !edge.va) {
-            halfedges.splice(iHalfedge,1);
-            }
-        }
-
-    // rhill 2011-05-26: I tried to use a binary search at insertion
-    // time to keep the array sorted on-the-fly (in Cell.addHalfedge()).
-    // There was no real benefits in doing so, performance on
-    // Firefox 3.6 was improved marginally, while performance on
-    // Opera 11 was penalized marginally.
-    halfedges.sort(function(a,b){return b.angle-a.angle;});
-    return halfedges.length;
-    };
-
-// Return a list of the neighbor Ids
-Voronoi.prototype.Cell.prototype.getNeighborIds = function() {
-    var neighbors = [],
-        iHalfedge = this.halfedges.length,
-        edge;
-    while (iHalfedge--){
-        edge = this.halfedges[iHalfedge].edge;
-        if (edge.lSite !== null && edge.lSite.voronoiId != this.site.voronoiId) {
-            neighbors.push(edge.lSite.voronoiId);
-            }
-        else if (edge.rSite !== null && edge.rSite.voronoiId != this.site.voronoiId){
-            neighbors.push(edge.rSite.voronoiId);
-            }
-        }
-    return neighbors;
-    };
-
-// Compute bounding box
-//
-Voronoi.prototype.Cell.prototype.getBbox = function() {
-    var halfedges = this.halfedges,
-        iHalfedge = halfedges.length,
-        xmin = Infinity,
-        ymin = Infinity,
-        xmax = -Infinity,
-        ymax = -Infinity,
-        v, vx, vy;
-    while (iHalfedge--) {
-        v = halfedges[iHalfedge].getStartpoint();
-        vx = v.x;
-        vy = v.y;
-        if (vx < xmin) {xmin = vx;}
-        if (vy < ymin) {ymin = vy;}
-        if (vx > xmax) {xmax = vx;}
-        if (vy > ymax) {ymax = vy;}
-        // we dont need to take into account end point,
-        // since each end point matches a start point
-        }
-    return {
-        x: xmin,
-        y: ymin,
-        width: xmax-xmin,
-        height: ymax-ymin
-        };
-    };
-
-// Return whether a point is inside, on, or outside the cell:
-//   -1: point is outside the perimeter of the cell
-//    0: point is on the perimeter of the cell
-//    1: point is inside the perimeter of the cell
-//
-Voronoi.prototype.Cell.prototype.pointIntersection = function(x, y) {
-    // Check if point in polygon. Since all polygons of a Voronoi
-    // diagram are convex, then:
-    // http://paulbourke.net/geometry/polygonmesh/
-    // Solution 3 (2D):
-    //   "If the polygon is convex then one can consider the polygon
-    //   "as a 'path' from the first vertex. A point is on the interior
-    //   "of this polygons if it is always on the same side of all the
-    //   "line segments making up the path. ...
-    //   "(y - y0) (x1 - x0) - (x - x0) (y1 - y0)
-    //   "if it is less than 0 then P is to the right of the line segment,
-    //   "if greater than 0 it is to the left, if equal to 0 then it lies
-    //   "on the line segment"
-    var halfedges = this.halfedges,
-        iHalfedge = halfedges.length,
-        halfedge,
-        p0, p1, r;
-    while (iHalfedge--) {
-        halfedge = halfedges[iHalfedge];
-        p0 = halfedge.getStartpoint();
-        p1 = halfedge.getEndpoint();
-        r = (y-p0.y)*(p1.x-p0.x)-(x-p0.x)*(p1.y-p0.y);
-        if (!r) {
-            return 0;
-            }
-        if (r > 0) {
-            return -1;
-            }
-        }
-    return 1;
-    };
-
-// ---------------------------------------------------------------------------
-// Edge methods
-//
-
-Voronoi.prototype.Vertex = function(x, y) {
-    this.x = x;
-    this.y = y;
-    };
-
-Voronoi.prototype.Edge = function(lSite, rSite) {
-    this.lSite = lSite;
-    this.rSite = rSite;
-    this.va = this.vb = null;
-    };
-
-Voronoi.prototype.Halfedge = function(edge, lSite, rSite) {
-    this.site = lSite;
-    this.edge = edge;
-    // 'angle' is a value to be used for properly sorting the
-    // halfsegments counterclockwise. By convention, we will
-    // use the angle of the line defined by the 'site to the left'
-    // to the 'site to the right'.
-    // However, border edges have no 'site to the right': thus we
-    // use the angle of line perpendicular to the halfsegment (the
-    // edge should have both end points defined in such case.)
-    if (rSite) {
-        this.angle = Math.atan2(rSite.y-lSite.y, rSite.x-lSite.x);
-        }
-    else {
-        var va = edge.va,
-            vb = edge.vb;
-        // rhill 2011-05-31: used to call getStartpoint()/getEndpoint(),
-        // but for performance purpose, these are expanded in place here.
-        this.angle = edge.lSite === lSite ?
-            Math.atan2(vb.x-va.x, va.y-vb.y) :
-            Math.atan2(va.x-vb.x, vb.y-va.y);
-        }
-    };
-
-Voronoi.prototype.createHalfedge = function(edge, lSite, rSite) {
-    return new this.Halfedge(edge, lSite, rSite);
-    };
-
-Voronoi.prototype.Halfedge.prototype.getStartpoint = function() {
-    return this.edge.lSite === this.site ? this.edge.va : this.edge.vb;
-    };
-
-Voronoi.prototype.Halfedge.prototype.getEndpoint = function() {
-    return this.edge.lSite === this.site ? this.edge.vb : this.edge.va;
-    };
-
-
-
-// this create and add a vertex to the internal collection
-
-Voronoi.prototype.createVertex = function(x, y) {
-    var v = this.vertexJunkyard.pop();
-    if ( !v ) {
-        v = new this.Vertex(x, y);
-        }
-    else {
-        v.x = x;
-        v.y = y;
-        }
-    this.vertices.push(v);
-    return v;
-    };
-
-// this create and add an edge to internal collection, and also create
-// two halfedges which are added to each site's counterclockwise array
-// of halfedges.
-
-Voronoi.prototype.createEdge = function(lSite, rSite, va, vb) {
-    var edge = this.edgeJunkyard.pop();
-    if ( !edge ) {
-        edge = new this.Edge(lSite, rSite);
-        }
-    else {
-        edge.lSite = lSite;
-        edge.rSite = rSite;
-        edge.va = edge.vb = null;
-        }
-
-    this.edges.push(edge);
-    if (va) {
-        this.setEdgeStartpoint(edge, lSite, rSite, va);
-        }
-    if (vb) {
-        this.setEdgeEndpoint(edge, lSite, rSite, vb);
-        }
-    this.cells[lSite.voronoiId].halfedges.push(this.createHalfedge(edge, lSite, rSite));
-    this.cells[rSite.voronoiId].halfedges.push(this.createHalfedge(edge, rSite, lSite));
-    return edge;
-    };
-
-Voronoi.prototype.createBorderEdge = function(lSite, va, vb) {
-    var edge = this.edgeJunkyard.pop();
-    if ( !edge ) {
-        edge = new this.Edge(lSite, null);
-        }
-    else {
-        edge.lSite = lSite;
-        edge.rSite = null;
-        }
-    edge.va = va;
-    edge.vb = vb;
-    this.edges.push(edge);
-    return edge;
-    };
-
-Voronoi.prototype.setEdgeStartpoint = function(edge, lSite, rSite, vertex) {
-    if (!edge.va && !edge.vb) {
-        edge.va = vertex;
-        edge.lSite = lSite;
-        edge.rSite = rSite;
-        }
-    else if (edge.lSite === rSite) {
-        edge.vb = vertex;
-        }
-    else {
-        edge.va = vertex;
-        }
-    };
-
-Voronoi.prototype.setEdgeEndpoint = function(edge, lSite, rSite, vertex) {
-    this.setEdgeStartpoint(edge, rSite, lSite, vertex);
-    };
-
-// ---------------------------------------------------------------------------
-// Beachline methods
-
-// rhill 2011-06-07: For some reasons, performance suffers significantly
-// when instanciating a literal object instead of an empty ctor
-Voronoi.prototype.Beachsection = function() {
-    };
-
-// rhill 2011-06-02: A lot of Beachsection instanciations
-// occur during the computation of the Voronoi diagram,
-// somewhere between the number of sites and twice the
-// number of sites, while the number of Beachsections on the
-// beachline at any given time is comparatively low. For this
-// reason, we reuse already created Beachsections, in order
-// to avoid new memory allocation. This resulted in a measurable
-// performance gain.
-
-Voronoi.prototype.createBeachsection = function(site) {
-    var beachsection = this.beachsectionJunkyard.pop();
-    if (!beachsection) {
-        beachsection = new this.Beachsection();
-        }
-    beachsection.site = site;
-    return beachsection;
-    };
-
-// calculate the left break point of a particular beach section,
-// given a particular sweep line
-Voronoi.prototype.leftBreakPoint = function(arc, directrix) {
-    // http://en.wikipedia.org/wiki/Parabola
-    // http://en.wikipedia.org/wiki/Quadratic_equation
-    // h1 = x1,
-    // k1 = (y1+directrix)/2,
-    // h2 = x2,
-    // k2 = (y2+directrix)/2,
-    // p1 = k1-directrix,
-    // a1 = 1/(4*p1),
-    // b1 = -h1/(2*p1),
-    // c1 = h1*h1/(4*p1)+k1,
-    // p2 = k2-directrix,
-    // a2 = 1/(4*p2),
-    // b2 = -h2/(2*p2),
-    // c2 = h2*h2/(4*p2)+k2,
-    // x = (-(b2-b1) + Math.sqrt((b2-b1)*(b2-b1) - 4*(a2-a1)*(c2-c1))) / (2*(a2-a1))
-    // When x1 become the x-origin:
-    // h1 = 0,
-    // k1 = (y1+directrix)/2,
-    // h2 = x2-x1,
-    // k2 = (y2+directrix)/2,
-    // p1 = k1-directrix,
-    // a1 = 1/(4*p1),
-    // b1 = 0,
-    // c1 = k1,
-    // p2 = k2-directrix,
-    // a2 = 1/(4*p2),
-    // b2 = -h2/(2*p2),
-    // c2 = h2*h2/(4*p2)+k2,
-    // x = (-b2 + Math.sqrt(b2*b2 - 4*(a2-a1)*(c2-k1))) / (2*(a2-a1)) + x1
-
-    // change code below at your own risk: care has been taken to
-    // reduce errors due to computers' finite arithmetic precision.
-    // Maybe can still be improved, will see if any more of this
-    // kind of errors pop up again.
-    var site = arc.site,
-        rfocx = site.x,
-        rfocy = site.y,
-        pby2 = rfocy-directrix;
-    // parabola in degenerate case where focus is on directrix
-    if (!pby2) {
-        return rfocx;
-        }
-    var lArc = arc.rbPrevious;
-    if (!lArc) {
-        return -Infinity;
-        }
-    site = lArc.site;
-    var lfocx = site.x,
-        lfocy = site.y,
-        plby2 = lfocy-directrix;
-    // parabola in degenerate case where focus is on directrix
-    if (!plby2) {
-        return lfocx;
-        }
-    var hl = lfocx-rfocx,
-        aby2 = 1/pby2-1/plby2,
-        b = hl/plby2;
-    if (aby2) {
-        return (-b+this.sqrt(b*b-2*aby2*(hl*hl/(-2*plby2)-lfocy+plby2/2+rfocy-pby2/2)))/aby2+rfocx;
-        }
-    // both parabolas have same distance to directrix, thus break point is midway
-    return (rfocx+lfocx)/2;
-    };
-
-// calculate the right break point of a particular beach section,
-// given a particular directrix
-Voronoi.prototype.rightBreakPoint = function(arc, directrix) {
-    var rArc = arc.rbNext;
-    if (rArc) {
-        return this.leftBreakPoint(rArc, directrix);
-        }
-    var site = arc.site;
-    return site.y === directrix ? site.x : Infinity;
-    };
-
-Voronoi.prototype.detachBeachsection = function(beachsection) {
-    this.detachCircleEvent(beachsection); // detach potentially attached circle event
-    this.beachline.rbRemoveNode(beachsection); // remove from RB-tree
-    this.beachsectionJunkyard.push(beachsection); // mark for reuse
-    };
-
-Voronoi.prototype.removeBeachsection = function(beachsection) {
-    var circle = beachsection.circleEvent,
-        x = circle.x,
-        y = circle.ycenter,
-        vertex = this.createVertex(x, y),
-        previous = beachsection.rbPrevious,
-        next = beachsection.rbNext,
-        disappearingTransitions = [beachsection],
-        abs_fn = Math.abs;
-
-    // remove collapsed beachsection from beachline
-    this.detachBeachsection(beachsection);
-
-    // there could be more than one empty arc at the deletion point, this
-    // happens when more than two edges are linked by the same vertex,
-    // so we will collect all those edges by looking up both sides of
-    // the deletion point.
-    // by the way, there is *always* a predecessor/successor to any collapsed
-    // beach section, it's just impossible to have a collapsing first/last
-    // beach sections on the beachline, since they obviously are unconstrained
-    // on their left/right side.
-
-    // look left
-    var lArc = previous;
-    while (lArc.circleEvent && abs_fn(x-lArc.circleEvent.x)<1e-9 && abs_fn(y-lArc.circleEvent.ycenter)<1e-9) {
-        previous = lArc.rbPrevious;
-        disappearingTransitions.unshift(lArc);
-        this.detachBeachsection(lArc); // mark for reuse
-        lArc = previous;
-        }
-    // even though it is not disappearing, I will also add the beach section
-    // immediately to the left of the left-most collapsed beach section, for
-    // convenience, since we need to refer to it later as this beach section
-    // is the 'left' site of an edge for which a start point is set.
-    disappearingTransitions.unshift(lArc);
-    this.detachCircleEvent(lArc);
-
-    // look right
-    var rArc = next;
-    while (rArc.circleEvent && abs_fn(x-rArc.circleEvent.x)<1e-9 && abs_fn(y-rArc.circleEvent.ycenter)<1e-9) {
-        next = rArc.rbNext;
-        disappearingTransitions.push(rArc);
-        this.detachBeachsection(rArc); // mark for reuse
-        rArc = next;
-        }
-    // we also have to add the beach section immediately to the right of the
-    // right-most collapsed beach section, since there is also a disappearing
-    // transition representing an edge's start point on its left.
-    disappearingTransitions.push(rArc);
-    this.detachCircleEvent(rArc);
-
-    // walk through all the disappearing transitions between beach sections and
-    // set the start point of their (implied) edge.
-    var nArcs = disappearingTransitions.length,
-        iArc;
-    for (iArc=1; iArc<nArcs; iArc++) {
-        rArc = disappearingTransitions[iArc];
-        lArc = disappearingTransitions[iArc-1];
-        this.setEdgeStartpoint(rArc.edge, lArc.site, rArc.site, vertex);
-        }
-
-    // create a new edge as we have now a new transition between
-    // two beach sections which were previously not adjacent.
-    // since this edge appears as a new vertex is defined, the vertex
-    // actually define an end point of the edge (relative to the site
-    // on the left)
-    lArc = disappearingTransitions[0];
-    rArc = disappearingTransitions[nArcs-1];
-    rArc.edge = this.createEdge(lArc.site, rArc.site, undefined, vertex);
-
-    // create circle events if any for beach sections left in the beachline
-    // adjacent to collapsed sections
-    this.attachCircleEvent(lArc);
-    this.attachCircleEvent(rArc);
-    };
-
-Voronoi.prototype.addBeachsection = function(site) {
-    var x = site.x,
-        directrix = site.y;
-
-    // find the left and right beach sections which will surround the newly
-    // created beach section.
-    // rhill 2011-06-01: This loop is one of the most often executed,
-    // hence we expand in-place the comparison-against-epsilon calls.
-    var lArc, rArc,
-        dxl, dxr,
-        node = this.beachline.root;
-
-    while (node) {
-        dxl = this.leftBreakPoint(node,directrix)-x;
-        // x lessThanWithEpsilon xl => falls somewhere before the left edge of the beachsection
-        if (dxl > 1e-9) {
-            // this case should never happen
-            // if (!node.rbLeft) {
-            //    rArc = node.rbLeft;
-            //    break;
-            //    }
-            node = node.rbLeft;
-            }
-        else {
-            dxr = x-this.rightBreakPoint(node,directrix);
-            // x greaterThanWithEpsilon xr => falls somewhere after the right edge of the beachsection
-            if (dxr > 1e-9) {
-                if (!node.rbRight) {
-                    lArc = node;
-                    break;
-                    }
-                node = node.rbRight;
-                }
-            else {
-                // x equalWithEpsilon xl => falls exactly on the left edge of the beachsection
-                if (dxl > -1e-9) {
-                    lArc = node.rbPrevious;
-                    rArc = node;
-                    }
-                // x equalWithEpsilon xr => falls exactly on the right edge of the beachsection
-                else if (dxr > -1e-9) {
-                    lArc = node;
-                    rArc = node.rbNext;
-                    }
-                // falls exactly somewhere in the middle of the beachsection
-                else {
-                    lArc = rArc = node;
-                    }
-                break;
-                }
-            }
-        }
-    // at this point, keep in mind that lArc and/or rArc could be
-    // undefined or null.
-
-    // create a new beach section object for the site and add it to RB-tree
-    var newArc = this.createBeachsection(site);
-    this.beachline.rbInsertSuccessor(lArc, newArc);
-
-    // cases:
-    //
-
-    // [null,null]
-    // least likely case: new beach section is the first beach section on the
-    // beachline.
-    // This case means:
-    //   no new transition appears
-    //   no collapsing beach section
-    //   new beachsection become root of the RB-tree
-    if (!lArc && !rArc) {
-        return;
-        }
-
-    // [lArc,rArc] where lArc == rArc
-    // most likely case: new beach section split an existing beach
-    // section.
-    // This case means:
-    //   one new transition appears
-    //   the left and right beach section might be collapsing as a result
-    //   two new nodes added to the RB-tree
-    if (lArc === rArc) {
-        // invalidate circle event of split beach section
-        this.detachCircleEvent(lArc);
-
-        // split the beach section into two separate beach sections
-        rArc = this.createBeachsection(lArc.site);
-        this.beachline.rbInsertSuccessor(newArc, rArc);
-
-        // since we have a new transition between two beach sections,
-        // a new edge is born
-        newArc.edge = rArc.edge = this.createEdge(lArc.site, newArc.site);
-
-        // check whether the left and right beach sections are collapsing
-        // and if so create circle events, to be notified when the point of
-        // collapse is reached.
-        this.attachCircleEvent(lArc);
-        this.attachCircleEvent(rArc);
-        return;
-        }
-
-    // [lArc,null]
-    // even less likely case: new beach section is the *last* beach section
-    // on the beachline -- this can happen *only* if *all* the previous beach
-    // sections currently on the beachline share the same y value as
-    // the new beach section.
-    // This case means:
-    //   one new transition appears
-    //   no collapsing beach section as a result
-    //   new beach section become right-most node of the RB-tree
-    if (lArc && !rArc) {
-        newArc.edge = this.createEdge(lArc.site,newArc.site);
-        return;
-        }
-
-    // [null,rArc]
-    // impossible case: because sites are strictly processed from top to bottom,
-    // and left to right, which guarantees that there will always be a beach section
-    // on the left -- except of course when there are no beach section at all on
-    // the beach line, which case was handled above.
-    // rhill 2011-06-02: No point testing in non-debug version
-    //if (!lArc && rArc) {
-    //    throw "Voronoi.addBeachsection(): What is this I don't even";
-    //    }
-
-    // [lArc,rArc] where lArc != rArc
-    // somewhat less likely case: new beach section falls *exactly* in between two
-    // existing beach sections
-    // This case means:
-    //   one transition disappears
-    //   two new transitions appear
-    //   the left and right beach section might be collapsing as a result
-    //   only one new node added to the RB-tree
-    if (lArc !== rArc) {
-        // invalidate circle events of left and right sites
-        this.detachCircleEvent(lArc);
-        this.detachCircleEvent(rArc);
-
-        // an existing transition disappears, meaning a vertex is defined at
-        // the disappearance point.
-        // since the disappearance is caused by the new beachsection, the
-        // vertex is at the center of the circumscribed circle of the left,
-        // new and right beachsections.
-        // http://mathforum.org/library/drmath/view/55002.html
-        // Except that I bring the origin at A to simplify
-        // calculation
-        var lSite = lArc.site,
-            ax = lSite.x,
-            ay = lSite.y,
-            bx=site.x-ax,
-            by=site.y-ay,
-            rSite = rArc.site,
-            cx=rSite.x-ax,
-            cy=rSite.y-ay,
-            d=2*(bx*cy-by*cx),
-            hb=bx*bx+by*by,
-            hc=cx*cx+cy*cy,
-            vertex = this.createVertex((cy*hb-by*hc)/d+ax, (bx*hc-cx*hb)/d+ay);
-
-        // one transition disappear
-        this.setEdgeStartpoint(rArc.edge, lSite, rSite, vertex);
-
-        // two new transitions appear at the new vertex location
-        newArc.edge = this.createEdge(lSite, site, undefined, vertex);
-        rArc.edge = this.createEdge(site, rSite, undefined, vertex);
-
-        // check whether the left and right beach sections are collapsing
-        // and if so create circle events, to handle the point of collapse.
-        this.attachCircleEvent(lArc);
-        this.attachCircleEvent(rArc);
-        return;
-        }
-    };
-
-// ---------------------------------------------------------------------------
-// Circle event methods
-
-// rhill 2011-06-07: For some reasons, performance suffers significantly
-// when instanciating a literal object instead of an empty ctor
-Voronoi.prototype.CircleEvent = function() {
-    // rhill 2013-10-12: it helps to state exactly what we are at ctor time.
-    this.arc = null;
-    this.rbLeft = null;
-    this.rbNext = null;
-    this.rbParent = null;
-    this.rbPrevious = null;
-    this.rbRed = false;
-    this.rbRight = null;
-    this.site = null;
-    this.x = this.y = this.ycenter = 0;
-    };
-
-Voronoi.prototype.attachCircleEvent = function(arc) {
-    var lArc = arc.rbPrevious,
-        rArc = arc.rbNext;
-    if (!lArc || !rArc) {return;} // does that ever happen?
-    var lSite = lArc.site,
-        cSite = arc.site,
-        rSite = rArc.site;
-
-    // If site of left beachsection is same as site of
-    // right beachsection, there can't be convergence
-    if (lSite===rSite) {return;}
-
-    // Find the circumscribed circle for the three sites associated
-    // with the beachsection triplet.
-    // rhill 2011-05-26: It is more efficient to calculate in-place
-    // rather than getting the resulting circumscribed circle from an
-    // object returned by calling Voronoi.circumcircle()
-    // http://mathforum.org/library/drmath/view/55002.html
-    // Except that I bring the origin at cSite to simplify calculations.
-    // The bottom-most part of the circumcircle is our Fortune 'circle
-    // event', and its center is a vertex potentially part of the final
-    // Voronoi diagram.
-    var bx = cSite.x,
-        by = cSite.y,
-        ax = lSite.x-bx,
-        ay = lSite.y-by,
-        cx = rSite.x-bx,
-        cy = rSite.y-by;
-
-    // If points l->c->r are clockwise, then center beach section does not
-    // collapse, hence it can't end up as a vertex (we reuse 'd' here, which
-    // sign is reverse of the orientation, hence we reverse the test.
-    // http://en.wikipedia.org/wiki/Curve_orientation#Orientation_of_a_simple_polygon
-    // rhill 2011-05-21: Nasty finite precision error which caused circumcircle() to
-    // return infinites: 1e-12 seems to fix the problem.
-    var d = 2*(ax*cy-ay*cx);
-    if (d >= -2e-12){return;}
-
-    var ha = ax*ax+ay*ay,
-        hc = cx*cx+cy*cy,
-        x = (cy*ha-ay*hc)/d,
-        y = (ax*hc-cx*ha)/d,
-        ycenter = y+by;
-
-    // Important: ybottom should always be under or at sweep, so no need
-    // to waste CPU cycles by checking
-
-    // recycle circle event object if possible
-    var circleEvent = this.circleEventJunkyard.pop();
-    if (!circleEvent) {
-        circleEvent = new this.CircleEvent();
-        }
-    circleEvent.arc = arc;
-    circleEvent.site = cSite;
-    circleEvent.x = x+bx;
-    circleEvent.y = ycenter+this.sqrt(x*x+y*y); // y bottom
-    circleEvent.ycenter = ycenter;
-    arc.circleEvent = circleEvent;
-
-    // find insertion point in RB-tree: circle events are ordered from
-    // smallest to largest
-    var predecessor = null,
-        node = this.circleEvents.root;
-    while (node) {
-        if (circleEvent.y < node.y || (circleEvent.y === node.y && circleEvent.x <= node.x)) {
-            if (node.rbLeft) {
-                node = node.rbLeft;
-                }
-            else {
-                predecessor = node.rbPrevious;
-                break;
-                }
-            }
-        else {
-            if (node.rbRight) {
-                node = node.rbRight;
-                }
-            else {
-                predecessor = node;
-                break;
-                }
-            }
-        }
-    this.circleEvents.rbInsertSuccessor(predecessor, circleEvent);
-    if (!predecessor) {
-        this.firstCircleEvent = circleEvent;
-        }
-    };
-
-Voronoi.prototype.detachCircleEvent = function(arc) {
-    var circleEvent = arc.circleEvent;
-    if (circleEvent) {
-        if (!circleEvent.rbPrevious) {
-            this.firstCircleEvent = circleEvent.rbNext;
-            }
-        this.circleEvents.rbRemoveNode(circleEvent); // remove from RB-tree
-        this.circleEventJunkyard.push(circleEvent);
-        arc.circleEvent = null;
-        }
-    };
-
-// ---------------------------------------------------------------------------
-// Diagram completion methods
-
-// connect dangling edges (not if a cursory test tells us
-// it is not going to be visible.
-// return value:
-//   false: the dangling endpoint couldn't be connected
-//   true: the dangling endpoint could be connected
-Voronoi.prototype.connectEdge = function(edge, bbox) {
-    // skip if end point already connected
-    var vb = edge.vb;
-    if (!!vb) {return true;}
-
-    // make local copy for performance purpose
-    var va = edge.va,
-        xl = bbox.xl,
-        xr = bbox.xr,
-        yt = bbox.yt,
-        yb = bbox.yb,
-        lSite = edge.lSite,
-        rSite = edge.rSite,
-        lx = lSite.x,
-        ly = lSite.y,
-        rx = rSite.x,
-        ry = rSite.y,
-        fx = (lx+rx)/2,
-        fy = (ly+ry)/2,
-        fm, fb;
-
-    // if we reach here, this means cells which use this edge will need
-    // to be closed, whether because the edge was removed, or because it
-    // was connected to the bounding box.
-    this.cells[lSite.voronoiId].closeMe = true;
-    this.cells[rSite.voronoiId].closeMe = true;
-
-    // get the line equation of the bisector if line is not vertical
-    if (ry !== ly) {
-        fm = (lx-rx)/(ry-ly);
-        fb = fy-fm*fx;
-        }
-
-    // remember, direction of line (relative to left site):
-    // upward: left.x < right.x
-    // downward: left.x > right.x
-    // horizontal: left.x == right.x
-    // upward: left.x < right.x
-    // rightward: left.y < right.y
-    // leftward: left.y > right.y
-    // vertical: left.y == right.y
-
-    // depending on the direction, find the best side of the
-    // bounding box to use to determine a reasonable start point
-
-    // rhill 2013-12-02:
-    // While at it, since we have the values which define the line,
-    // clip the end of va if it is outside the bbox.
-    // https://github.com/gorhill/Javascript-Voronoi/issues/15
-    // TODO: Do all the clipping here rather than rely on Liang-Barsky
-    // which does not do well sometimes due to loss of arithmetic
-    // precision. The code here doesn't degrade if one of the vertex is
-    // at a huge distance.
-
-    // special case: vertical line
-    if (fm === undefined) {
-        // doesn't intersect with viewport
-        if (fx < xl || fx >= xr) {return false;}
-        // downward
-        if (lx > rx) {
-            if (!va || va.y < yt) {
-                va = this.createVertex(fx, yt);
-                }
-            else if (va.y >= yb) {
-                return false;
-                }
-            vb = this.createVertex(fx, yb);
-            }
-        // upward
-        else {
-            if (!va || va.y > yb) {
-                va = this.createVertex(fx, yb);
-                }
-            else if (va.y < yt) {
-                return false;
-                }
-            vb = this.createVertex(fx, yt);
-            }
-        }
-    // closer to vertical than horizontal, connect start point to the
-    // top or bottom side of the bounding box
-    else if (fm < -1 || fm > 1) {
-        // downward
-        if (lx > rx) {
-            if (!va || va.y < yt) {
-                va = this.createVertex((yt-fb)/fm, yt);
-                }
-            else if (va.y >= yb) {
-                return false;
-                }
-            vb = this.createVertex((yb-fb)/fm, yb);
-            }
-        // upward
-        else {
-            if (!va || va.y > yb) {
-                va = this.createVertex((yb-fb)/fm, yb);
-                }
-            else if (va.y < yt) {
-                return false;
-                }
-            vb = this.createVertex((yt-fb)/fm, yt);
-            }
-        }
-    // closer to horizontal than vertical, connect start point to the
-    // left or right side of the bounding box
-    else {
-        // rightward
-        if (ly < ry) {
-            if (!va || va.x < xl) {
-                va = this.createVertex(xl, fm*xl+fb);
-                }
-            else if (va.x >= xr) {
-                return false;
-                }
-            vb = this.createVertex(xr, fm*xr+fb);
-            }
-        // leftward
-        else {
-            if (!va || va.x > xr) {
-                va = this.createVertex(xr, fm*xr+fb);
-                }
-            else if (va.x < xl) {
-                return false;
-                }
-            vb = this.createVertex(xl, fm*xl+fb);
-            }
-        }
-    edge.va = va;
-    edge.vb = vb;
-
-    return true;
-    };
-
-// line-clipping code taken from:
-//   Liang-Barsky function by Daniel White
-//   http://www.skytopia.com/project/articles/compsci/clipping.html
-// Thanks!
-// A bit modified to minimize code paths
-Voronoi.prototype.clipEdge = function(edge, bbox) {
-    var ax = edge.va.x,
-        ay = edge.va.y,
-        bx = edge.vb.x,
-        by = edge.vb.y,
-        t0 = 0,
-        t1 = 1,
-        dx = bx-ax,
-        dy = by-ay;
-    // left
-    var q = ax-bbox.xl;
-    if (dx===0 && q<0) {return false;}
-    var r = -q/dx;
-    if (dx<0) {
-        if (r<t0) {return false;}
-        if (r<t1) {t1=r;}
-        }
-    else if (dx>0) {
-        if (r>t1) {return false;}
-        if (r>t0) {t0=r;}
-        }
-    // right
-    q = bbox.xr-ax;
-    if (dx===0 && q<0) {return false;}
-    r = q/dx;
-    if (dx<0) {
-        if (r>t1) {return false;}
-        if (r>t0) {t0=r;}
-        }
-    else if (dx>0) {
-        if (r<t0) {return false;}
-        if (r<t1) {t1=r;}
-        }
-    // top
-    q = ay-bbox.yt;
-    if (dy===0 && q<0) {return false;}
-    r = -q/dy;
-    if (dy<0) {
-        if (r<t0) {return false;}
-        if (r<t1) {t1=r;}
-        }
-    else if (dy>0) {
-        if (r>t1) {return false;}
-        if (r>t0) {t0=r;}
-        }
-    // bottom
-    q = bbox.yb-ay;
-    if (dy===0 && q<0) {return false;}
-    r = q/dy;
-    if (dy<0) {
-        if (r>t1) {return false;}
-        if (r>t0) {t0=r;}
-        }
-    else if (dy>0) {
-        if (r<t0) {return false;}
-        if (r<t1) {t1=r;}
-        }
-
-    // if we reach this point, Voronoi edge is within bbox
-
-    // if t0 > 0, va needs to change
-    // rhill 2011-06-03: we need to create a new vertex rather
-    // than modifying the existing one, since the existing
-    // one is likely shared with at least another edge
-    if (t0 > 0) {
-        edge.va = this.createVertex(ax+t0*dx, ay+t0*dy);
-        }
-
-    // if t1 < 1, vb needs to change
-    // rhill 2011-06-03: we need to create a new vertex rather
-    // than modifying the existing one, since the existing
-    // one is likely shared with at least another edge
-    if (t1 < 1) {
-        edge.vb = this.createVertex(ax+t1*dx, ay+t1*dy);
-        }
-
-    // va and/or vb were clipped, thus we will need to close
-    // cells which use this edge.
-    if ( t0 > 0 || t1 < 1 ) {
-        this.cells[edge.lSite.voronoiId].closeMe = true;
-        this.cells[edge.rSite.voronoiId].closeMe = true;
+    /**
+     *  Runs this in each iteration
+     */
+
+  }, {
+    key: 'tick',
+    value: function tick() {
+      var _this2 = this;
+
+      var state = this.state;
+      var self = this;
+
+      // This function is used for getting coordinates from AVSDF elements and passing it to cytoscape
+      var positions = this.avsdfLayout.getPositionsData();
+      state.nodes.forEach(function (n) {
+        var s = _this2.getScratch(n);
+
+        // example : put node at random position
+        s.x = positions[n.data('id')].x;
+        s.y = positions[n.data('id')].y;
+      });
+
+      if (state.tickIndex >= state.nodes.size()) return true;
+
+      this.avsdfLayout.oneStepPostProcess(this.sortedByDegreeList[state.tickIndex]);
+      this.avsdfLayout.updateNodeAngles();
+      this.avsdfLayout.updateNodeCoordinates();
     }
 
-    return true;
-    };
+    /**
+     *  Runs this function after the layout is done ticking
+     */
 
-// Connect/cut edges at bounding box
-Voronoi.prototype.clipEdges = function(bbox) {
-    // connect all dangling edges to bounding box
-    // or get rid of them if it can't be done
-    var edges = this.edges,
-        iEdge = edges.length,
-        edge,
-        abs_fn = Math.abs;
+  }, {
+    key: 'postrun',
+    value: function postrun() {}
 
-    // iterate backward so we can splice safely
-    while (iEdge--) {
-        edge = edges[iEdge];
-        // edge is removed if:
-        //   it is wholly outside the bounding box
-        //   it is looking more like a point than a line
-        if (!this.connectEdge(edge, bbox) ||
-            !this.clipEdge(edge, bbox) ||
-            (abs_fn(edge.va.x-edge.vb.x)<1e-9 && abs_fn(edge.va.y-edge.vb.y)<1e-9)) {
-            edge.va = edge.vb = null;
-            edges.splice(iEdge,1);
-            }
-        }
-    };
+    /**
+     *  Clean up any object refs that could prevent garbage collection, etc.
+     */
 
-// Close the cells.
-// The cells are bound by the supplied bounding box.
-// Each cell refers to its associated site, and a list
-// of halfedges ordered counterclockwise.
-Voronoi.prototype.closeCells = function(bbox) {
-    var xl = bbox.xl,
-        xr = bbox.xr,
-        yt = bbox.yt,
-        yb = bbox.yb,
-        cells = this.cells,
-        iCell = cells.length,
-        cell,
-        iLeft,
-        halfedges, nHalfedges,
-        edge,
-        va, vb, vz,
-        lastBorderSegment,
-        abs_fn = Math.abs;
+  }, {
+    key: 'destroy',
+    value: function destroy() {
+      _get(AVSDF.prototype.__proto__ || Object.getPrototypeOf(AVSDF.prototype), 'destroy', this).call(this);
+      return this;
+    }
 
-    while (iCell--) {
-        cell = cells[iCell];
-        // prune, order halfedges counterclockwise, then add missing ones
-        // required to close cells
-        if (!cell.prepareHalfedges()) {
-            continue;
-            }
-        if (!cell.closeMe) {
-            continue;
-            }
-        // find first 'unclosed' point.
-        // an 'unclosed' point will be the end point of a halfedge which
-        // does not match the start point of the following halfedge
-        halfedges = cell.halfedges;
-        nHalfedges = halfedges.length;
-        // special case: only one site, in which case, the viewport is the cell
-        // ...
+    /**
+     *  Transition from cytoscape nodes to AVSDF elements
+     */
 
-        // all other cases
-        iLeft = 0;
-        while (iLeft < nHalfedges) {
-            va = halfedges[iLeft].getEndpoint();
-            vz = halfedges[(iLeft+1) % nHalfedges].getStartpoint();
-            // if end point is not equal to start point, we need to add the missing
-            // halfedge(s) up to vz
-            if (abs_fn(va.x-vz.x)>=1e-9 || abs_fn(va.y-vz.y)>=1e-9) {
+  }, {
+    key: 'processChildrenList',
+    value: function processChildrenList(parent, children, layout) {
+      var size = children.length;
+      for (var i = 0; i < size; i++) {
+        var theChild = children[i];
+        var theNode = void 0;
 
-                // rhill 2013-12-02:
-                // "Holes" in the halfedges are not necessarily always adjacent.
-                // https://github.com/gorhill/Javascript-Voronoi/issues/16
-
-                // find entry point:
-                switch (true) {
-
-                    // walk downward along left side
-                    case this.equalWithEpsilon(va.x,xl) && this.lessThanWithEpsilon(va.y,yb):
-                        lastBorderSegment = this.equalWithEpsilon(vz.x,xl);
-                        vb = this.createVertex(xl, lastBorderSegment ? vz.y : yb);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                    // walk rightward along bottom side
-                    case this.equalWithEpsilon(va.y,yb) && this.lessThanWithEpsilon(va.x,xr):
-                        lastBorderSegment = this.equalWithEpsilon(vz.y,yb);
-                        vb = this.createVertex(lastBorderSegment ? vz.x : xr, yb);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                    // walk upward along right side
-                    case this.equalWithEpsilon(va.x,xr) && this.greaterThanWithEpsilon(va.y,yt):
-                        lastBorderSegment = this.equalWithEpsilon(vz.x,xr);
-                        vb = this.createVertex(xr, lastBorderSegment ? vz.y : yt);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                    // walk leftward along top side
-                    case this.equalWithEpsilon(va.y,yt) && this.greaterThanWithEpsilon(va.x,xl):
-                        lastBorderSegment = this.equalWithEpsilon(vz.y,yt);
-                        vb = this.createVertex(lastBorderSegment ? vz.x : xl, yt);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                        // walk downward along left side
-                        lastBorderSegment = this.equalWithEpsilon(vz.x,xl);
-                        vb = this.createVertex(xl, lastBorderSegment ? vz.y : yb);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                        // walk rightward along bottom side
-                        lastBorderSegment = this.equalWithEpsilon(vz.y,yb);
-                        vb = this.createVertex(lastBorderSegment ? vz.x : xr, yb);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        va = vb;
-                        // fall through
-
-                        // walk upward along right side
-                        lastBorderSegment = this.equalWithEpsilon(vz.x,xr);
-                        vb = this.createVertex(xr, lastBorderSegment ? vz.y : yt);
-                        edge = this.createBorderEdge(cell.site, va, vb);
-                        iLeft++;
-                        halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-                        nHalfedges++;
-                        if ( lastBorderSegment ) { break; }
-                        // fall through
-
-                    default:
-                        throw "Voronoi.closeCells() > this makes no sense!";
-                    }
-                }
-            iLeft++;
-            }
-        cell.closeMe = false;
-        }
-    };
-
-// ---------------------------------------------------------------------------
-// Debugging helper
-/*
-Voronoi.prototype.dumpBeachline = function(y) {
-    console.log('Voronoi.dumpBeachline(%f) > Beachsections, from left to right:', y);
-    if ( !this.beachline ) {
-        console.log('  None');
-        }
-    else {
-        var bs = this.beachline.getFirst(this.beachline.root);
-        while ( bs ) {
-            console.log('  site %d: xl: %f, xr: %f', bs.site.voronoiId, this.leftBreakPoint(bs, y), this.rightBreakPoint(bs, y));
-            bs = bs.rbNext;
-            }
-        }
-    };
-*/
-
-// ---------------------------------------------------------------------------
-// Helper: Quantize sites
-
-// rhill 2013-10-12:
-// This is to solve https://github.com/gorhill/Javascript-Voronoi/issues/15
-// Since not all users will end up using the kind of coord values which would
-// cause the issue to arise, I chose to let the user decide whether or not
-// he should sanitize his coord values through this helper. This way, for
-// those users who uses coord values which are known to be fine, no overhead is
-// added.
-
-Voronoi.prototype.quantizeSites = function(sites) {
-    var ε = this.ε,
-        n = sites.length,
-        site;
-    while ( n-- ) {
-        site = sites[n];
-        site.x = Math.floor(site.x / ε) * ε;
-        site.y = Math.floor(site.y / ε) * ε;
-        }
-    };
-
-// ---------------------------------------------------------------------------
-// Helper: Recycle diagram: all vertex, edge and cell objects are
-// "surrendered" to the Voronoi object for reuse.
-// TODO: rhill-voronoi-core v2: more performance to be gained
-// when I change the semantic of what is returned.
-
-Voronoi.prototype.recycle = function(diagram) {
-    if ( diagram ) {
-        if ( diagram instanceof this.Diagram ) {
-            this.toRecycle = diagram;
-            }
-        else {
-            throw 'Voronoi.recycleDiagram() > Need a Diagram object.';
-            }
-        }
-    };
-
-// ---------------------------------------------------------------------------
-// Top-level Fortune loop
-
-// rhill 2011-05-19:
-//   Voronoi sites are kept client-side now, to allow
-//   user to freely modify content. At compute time,
-//   *references* to sites are copied locally.
-
-Voronoi.prototype.compute = function(sites, bbox) {
-    // to measure execution time
-    var startTime = new Date();
-
-    // init internal state
-    this.reset();
-
-    // any diagram data available for recycling?
-    // I do that here so that this is included in execution time
-    if ( this.toRecycle ) {
-        this.vertexJunkyard = this.vertexJunkyard.concat(this.toRecycle.vertices);
-        this.edgeJunkyard = this.edgeJunkyard.concat(this.toRecycle.edges);
-        this.cellJunkyard = this.cellJunkyard.concat(this.toRecycle.cells);
-        this.toRecycle = null;
-        }
-
-    // Initialize site event queue
-    var siteEvents = sites.slice(0);
-    siteEvents.sort(function(a,b){
-        var r = b.y - a.y;
-        if (r) {return r;}
-        return b.x - a.x;
+        //Label dimensions are NOT included when calculating node dimensions
+        var dimensions = theChild.layoutDimensions({
+          nodeDimensionsIncludeLabels: false
         });
 
-    // process queue
-    var site = siteEvents.pop(),
-        siteid = 0,
-        xsitex, // to avoid duplicate sites
-        xsitey,
-        cells = this.cells,
-        circle;
-
-    // main loop
-    for (;;) {
-        // we need to figure whether we handle a site or circle event
-        // for this we find out if there is a site event and it is
-        // 'earlier' than the circle event
-        circle = this.firstCircleEvent;
-
-        // add beach section
-        if (site && (!circle || site.y < circle.y || (site.y === circle.y && site.x < circle.x))) {
-            // only if site is not a duplicate
-            if (site.x !== xsitex || site.y !== xsitey) {
-                // first create cell for new site
-                cells[siteid] = this.createCell(site);
-                site.voronoiId = siteid++;
-                // then create a beachsection for that site
-                this.addBeachsection(site);
-                // remember last site coords to detect duplicate
-                xsitey = site.y;
-                xsitex = site.x;
-                }
-            site = siteEvents.pop();
-            }
-
-        // remove beach section
-        else if (circle) {
-            this.removeBeachsection(circle.arc);
-            }
-
-        // all done, quit
-        else {
-            break;
-            }
+        if (theChild.outerWidth() != null && theChild.outerHeight() != null) {
+          theNode = parent.add(new AVSDFNode(layout.graphManager, null, new PointD(theChild.position('x') - dimensions.w / 2, theChild.position('y') - dimensions.h / 2), new DimensionD(parseFloat(dimensions.w), parseFloat(dimensions.h))));
+        } else {
+          theNode = parent.add(new AVSDFNode(this.graphManager));
         }
 
-    // wrapping-up:
-    //   connect dangling edges to bounding box
-    //   cut edges as per bounding box
-    //   discard edges completely outside bounding box
-    //   discard edges which are point-like
-    this.clipEdges(bbox);
+        // Attach id to the layout node
+        theNode.id = theChild.data("id");
 
-    //   add missing edges in order to close opened cells
-    this.closeCells(bbox);
+        // Attach the paddings of cy node to layout node
+        theNode.paddingLeft = parseInt(theChild.css('padding'));
+        theNode.paddingTop = parseInt(theChild.css('padding'));
+        theNode.paddingRight = parseInt(theChild.css('padding'));
+        theNode.paddingBottom = parseInt(theChild.css('padding'));
 
-    // to measure execution time
-    var stopTime = new Date();
+        // Map the layout node
+        this.idToLNode[theChild.data("id")] = theNode;
 
-    // prepare return values
-    var diagram = new this.Diagram();
-    diagram.cells = this.cells;
-    diagram.edges = this.edges;
-    diagram.vertices = this.vertices;
-    diagram.execTime = stopTime.getTime()-startTime.getTime();
+        if (isNaN(theNode.rect.x)) {
+          theNode.rect.x = 0;
+        }
 
-    // clean up
-    this.reset();
+        if (isNaN(theNode.rect.y)) {
+          theNode.rect.y = 0;
+        }
+      }
+    }
+  }]);
 
-    return diagram;
-    };
+  return AVSDF;
+}(ContinuousLayout);
 
-module.exports = Voronoi;
-
+module.exports = AVSDF;
 
 /***/ }),
-/* 3 */
-/***/ (function(module, exports) {
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __WEBPACK_EXTERNAL_MODULE_3__;
+"use strict";
+
+
+// general default options for force-directed layout
+
+module.exports = Object.freeze({
+  animate: true, // whether to show the layout as it's running; special 'end' value makes the layout animate like a discrete layout
+  refresh: 10, // number of ticks per frame; higher is faster but more jerky
+  maxIterations: 1000, // max iterations before the layout will bail out
+  ungrabifyWhileSimulating: false, // so you can't drag nodes during layout
+  fit: true, // on every layout reposition of nodes, fit the viewport
+  padding: 30, // padding around the simulation
+  boundingBox: undefined, // constrain layout bounds; { x1, y1, x2, y2 } or { x1, y1, w, h }
+
+  // layout event callbacks
+  ready: function ready() {}, // on layoutready
+  stop: function stop() {}, // on layoutstop
+
+  // positioning options
+  randomize: false, // use random node positions at beginning of layout
+
+  // infinite layout options
+  infinite: false // overrides all other options for a forces-all-the-time mode
+});
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+ A generic continuous layout class
+ */
+
+var assign = __webpack_require__(1);
+var defaults = __webpack_require__(5);
+var makeBoundingBox = __webpack_require__(7);
+
+var _require = __webpack_require__(8),
+    setInitialPositionState = _require.setInitialPositionState,
+    refreshPositions = _require.refreshPositions,
+    getNodePositionData = _require.getNodePositionData;
+
+var _require2 = __webpack_require__(9),
+    multitick = _require2.multitick;
+
+var Layout = function () {
+  function Layout(options) {
+    _classCallCheck(this, Layout);
+
+    var o = this.options = assign({}, defaults, options);
+
+    var s = this.state = assign({}, o, {
+      layout: this,
+      nodes: o.eles.nodes(),
+      edges: o.eles.edges(),
+      tickIndex: 0,
+      firstUpdate: true
+    });
+
+    s.animateEnd = o.animate && o.animate === 'end';
+    s.animateContinuously = o.animate && !s.animateEnd;
+  }
+
+  _createClass(Layout, [{
+    key: 'getScratch',
+    value: function getScratch(el) {
+      var name = this.state.name;
+      var scratch = el.scratch(name);
+
+      if (!scratch) {
+        scratch = {};
+
+        el.scratch(name, scratch);
+      }
+
+      return scratch;
+    }
+  }, {
+    key: 'run',
+    value: function run() {
+      var l = this;
+      var s = this.state;
+
+      s.tickIndex = 0;
+      s.firstUpdate = true;
+      s.startTime = Date.now();
+      s.running = true;
+
+      s.currentBoundingBox = makeBoundingBox(s.boundingBox, s.cy);
+
+      if (s.ready) {
+        l.one('ready', s.ready);
+      }
+      if (s.stop) {
+        l.one('stop', s.stop);
+      }
+
+      s.nodes.forEach(function (n) {
+        return setInitialPositionState(n, s);
+      });
+
+      l.prerun(s);
+
+      if (s.animateContinuously) {
+        var ungrabify = function ungrabify(node) {
+          if (!s.ungrabifyWhileSimulating) {
+            return;
+          }
+
+          var grabbable = getNodePositionData(node, s).grabbable = node.grabbable();
+
+          if (grabbable) {
+            node.ungrabify();
+          }
+        };
+
+        var regrabify = function regrabify(node) {
+          if (!s.ungrabifyWhileSimulating) {
+            return;
+          }
+
+          var grabbable = getNodePositionData(node, s).grabbable;
+
+          if (grabbable) {
+            node.grabify();
+          }
+        };
+
+        var updateGrabState = function updateGrabState(node) {
+          return getNodePositionData(node, s).grabbed = node.grabbed();
+        };
+
+        var onGrab = function onGrab(_ref) {
+          var target = _ref.target;
+
+          updateGrabState(target);
+        };
+
+        var onFree = onGrab;
+
+        var onDrag = function onDrag(_ref2) {
+          var target = _ref2.target;
+
+          var p = getNodePositionData(target, s);
+          var tp = target.position();
+
+          p.x = tp.x;
+          p.y = tp.y;
+        };
+
+        var listenToGrab = function listenToGrab(node) {
+          node.on('grab', onGrab);
+          node.on('free', onFree);
+          node.on('drag', onDrag);
+        };
+
+        var unlistenToGrab = function unlistenToGrab(node) {
+          node.removeListener('grab', onGrab);
+          node.removeListener('free', onFree);
+          node.removeListener('drag', onDrag);
+        };
+
+        var fit = function fit() {
+          if (s.fit && s.animateContinuously) {
+            s.cy.fit(s.padding);
+          }
+        };
+
+        var onNotDone = function onNotDone() {
+          refreshPositions(s.nodes, s);
+          fit();
+
+          requestAnimationFrame(_frame);
+        };
+
+        var _frame = function _frame() {
+          multitick(s, onNotDone, _onDone);
+        };
+
+        var _onDone = function _onDone() {
+          refreshPositions(s.nodes, s);
+          fit();
+
+          s.nodes.forEach(function (n) {
+            regrabify(n);
+            unlistenToGrab(n);
+          });
+
+          s.running = false;
+
+          l.emit('layoutstop');
+        };
+
+        l.emit('layoutstart');
+
+        s.nodes.forEach(function (n) {
+          ungrabify(n);
+          listenToGrab(n);
+        });
+
+        _frame(); // kick off
+      } else {
+        var done = false;
+        var _onNotDone = function _onNotDone() {};
+        var _onDone2 = function _onDone2() {
+          return done = true;
+        };
+
+        while (!done) {
+          multitick(s, _onNotDone, _onDone2);
+        }
+
+        s.eles.layoutPositions(this, s, function (node) {
+          var pd = getNodePositionData(node, s);
+
+          return { x: pd.x, y: pd.y };
+        });
+      }
+
+      l.postrun(s);
+
+      return this; // chaining
+    }
+  }, {
+    key: 'prerun',
+    value: function prerun() {}
+  }, {
+    key: 'postrun',
+    value: function postrun() {}
+  }, {
+    key: 'tick',
+    value: function tick() {}
+  }, {
+    key: 'stop',
+    value: function stop() {
+      this.state.running = false;
+
+      return this; // chaining
+    }
+  }, {
+    key: 'destroy',
+    value: function destroy() {
+      return this; // chaining
+    }
+  }]);
+
+  return Layout;
+}();
+
+module.exports = Layout;
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function (bb, cy) {
+  if (bb == null) {
+    bb = { x1: 0, y1: 0, w: cy.width(), h: cy.height() };
+  } else {
+    // copy
+    bb = { x1: bb.x1, x2: bb.x2, y1: bb.y1, y2: bb.y2, w: bb.w, h: bb.h };
+  }
+
+  if (bb.x2 == null) {
+    bb.x2 = bb.x1 + bb.w;
+  }
+  if (bb.w == null) {
+    bb.w = bb.x2 - bb.x1;
+  }
+  if (bb.y2 == null) {
+    bb.y2 = bb.y1 + bb.h;
+  }
+  if (bb.h == null) {
+    bb.h = bb.y2 - bb.y1;
+  }
+
+  return bb;
+};
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var assign = __webpack_require__(1);
+
+var setInitialPositionState = function setInitialPositionState(node, state) {
+  var p = node.position();
+  var bb = state.currentBoundingBox;
+  var scratch = node.scratch(state.name);
+
+  if (scratch == null) {
+    scratch = {};
+
+    node.scratch(state.name, scratch);
+  }
+
+  assign(scratch, state.randomize ? {
+    x: bb.x1 + Math.round(Math.random() * bb.w),
+    y: bb.y1 + Math.round(Math.random() * bb.h)
+  } : {
+    x: p.x,
+    y: p.y
+  });
+
+  scratch.locked = node.locked();
+};
+
+var getNodePositionData = function getNodePositionData(node, state) {
+  return node.scratch(state.name);
+};
+
+var refreshPositions = function refreshPositions(nodes, state) {
+  nodes.positions(function (node) {
+    var scratch = node.scratch(state.name);
+
+    return {
+      x: scratch.x,
+      y: scratch.y
+    };
+  });
+};
+
+module.exports = { setInitialPositionState: setInitialPositionState, getNodePositionData: getNodePositionData, refreshPositions: refreshPositions };
+
+/***/ }),
+/* 9 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var nop = function nop() {};
+
+var tick = function tick(state) {
+  var s = state;
+  var l = state.layout;
+
+  var tickIndicatesDone = l.tick(s);
+
+  if (s.firstUpdate) {
+    if (s.animateContinuously) {
+      // indicate the initial positions have been set
+      s.layout.emit('layoutready');
+    }
+    s.firstUpdate = false;
+  }
+
+  s.tickIndex++;
+
+  var duration = Date.now() - s.startTime;
+
+  return !s.infinite && tickIndicatesDone;
+};
+
+var multitick = function multitick(state) {
+  var onNotDone = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : nop;
+  var onDone = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : nop;
+
+  var done = false;
+  var s = state;
+
+  for (var i = 0; i < s.refresh; i++) {
+    done = !s.running || tick(s);
+
+    if (done) {
+      break;
+    }
+  }
+
+  if (!done) {
+    onNotDone();
+  } else {
+    onDone();
+  }
+};
+
+module.exports = { tick: tick, multitick: multitick };
 
 /***/ })
 /******/ ]);
@@ -34270,6 +33593,4345 @@ var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_
 
 /***/ }),
 
+/***/ "../node_modules/layout-base/layout-base.js":
+/*!**************************************************!*\
+  !*** ../node_modules/layout-base/layout-base.js ***!
+  \**************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(true)
+		module.exports = factory();
+	else {}
+})(this, function() {
+return /******/ (function(modules) { // webpackBootstrap
+/******/ 	// The module cache
+/******/ 	var installedModules = {};
+/******/
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/
+/******/ 		// Check if module is in cache
+/******/ 		if(installedModules[moduleId]) {
+/******/ 			return installedModules[moduleId].exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = installedModules[moduleId] = {
+/******/ 			i: moduleId,
+/******/ 			l: false,
+/******/ 			exports: {}
+/******/ 		};
+/******/
+/******/ 		// Execute the module function
+/******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/
+/******/ 		// Flag the module as loaded
+/******/ 		module.l = true;
+/******/
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/
+/******/
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = modules;
+/******/
+/******/ 	// expose the module cache
+/******/ 	__webpack_require__.c = installedModules;
+/******/
+/******/ 	// identity function for calling harmony imports with the correct context
+/******/ 	__webpack_require__.i = function(value) { return value; };
+/******/
+/******/ 	// define getter function for harmony exports
+/******/ 	__webpack_require__.d = function(exports, name, getter) {
+/******/ 		if(!__webpack_require__.o(exports, name)) {
+/******/ 			Object.defineProperty(exports, name, {
+/******/ 				configurable: false,
+/******/ 				enumerable: true,
+/******/ 				get: getter
+/******/ 			});
+/******/ 		}
+/******/ 	};
+/******/
+/******/ 	// getDefaultExport function for compatibility with non-harmony modules
+/******/ 	__webpack_require__.n = function(module) {
+/******/ 		var getter = module && module.__esModule ?
+/******/ 			function getDefault() { return module['default']; } :
+/******/ 			function getModuleExports() { return module; };
+/******/ 		__webpack_require__.d(getter, 'a', getter);
+/******/ 		return getter;
+/******/ 	};
+/******/
+/******/ 	// Object.prototype.hasOwnProperty.call
+/******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+/******/
+/******/ 	// __webpack_public_path__
+/******/ 	__webpack_require__.p = "";
+/******/
+/******/ 	// Load entry module and return exports
+/******/ 	return __webpack_require__(__webpack_require__.s = 26);
+/******/ })
+/************************************************************************/
+/******/ ([
+/* 0 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function LayoutConstants() {}
+
+/**
+ * Layout Quality: 0:draft, 1:default, 2:proof
+ */
+LayoutConstants.QUALITY = 1;
+
+/**
+ * Default parameters
+ */
+LayoutConstants.DEFAULT_CREATE_BENDS_AS_NEEDED = false;
+LayoutConstants.DEFAULT_INCREMENTAL = false;
+LayoutConstants.DEFAULT_ANIMATION_ON_LAYOUT = true;
+LayoutConstants.DEFAULT_ANIMATION_DURING_LAYOUT = false;
+LayoutConstants.DEFAULT_ANIMATION_PERIOD = 50;
+LayoutConstants.DEFAULT_UNIFORM_LEAF_NODE_SIZES = false;
+
+// -----------------------------------------------------------------------------
+// Section: General other constants
+// -----------------------------------------------------------------------------
+/*
+ * Margins of a graph to be applied on bouding rectangle of its contents. We
+ * assume margins on all four sides to be uniform.
+ */
+LayoutConstants.DEFAULT_GRAPH_MARGIN = 15;
+
+/*
+ * Whether to consider labels in node dimensions or not
+ */
+LayoutConstants.NODE_DIMENSIONS_INCLUDE_LABELS = false;
+
+/*
+ * Default dimension of a non-compound node.
+ */
+LayoutConstants.SIMPLE_NODE_SIZE = 40;
+
+/*
+ * Default dimension of a non-compound node.
+ */
+LayoutConstants.SIMPLE_NODE_HALF_SIZE = LayoutConstants.SIMPLE_NODE_SIZE / 2;
+
+/*
+ * Empty compound node size. When a compound node is empty, its both
+ * dimensions should be of this value.
+ */
+LayoutConstants.EMPTY_COMPOUND_NODE_SIZE = 40;
+
+/*
+ * Minimum length that an edge should take during layout
+ */
+LayoutConstants.MIN_EDGE_LENGTH = 1;
+
+/*
+ * World boundaries that layout operates on
+ */
+LayoutConstants.WORLD_BOUNDARY = 1000000;
+
+/*
+ * World boundaries that random positioning can be performed with
+ */
+LayoutConstants.INITIAL_WORLD_BOUNDARY = LayoutConstants.WORLD_BOUNDARY / 1000;
+
+/*
+ * Coordinates of the world center
+ */
+LayoutConstants.WORLD_CENTER_X = 1200;
+LayoutConstants.WORLD_CENTER_Y = 900;
+
+module.exports = LayoutConstants;
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LGraphObject = __webpack_require__(2);
+var IGeometry = __webpack_require__(8);
+var IMath = __webpack_require__(9);
+
+function LEdge(source, target, vEdge) {
+  LGraphObject.call(this, vEdge);
+
+  this.isOverlapingSourceAndTarget = false;
+  this.vGraphObject = vEdge;
+  this.bendpoints = [];
+  this.source = source;
+  this.target = target;
+}
+
+LEdge.prototype = Object.create(LGraphObject.prototype);
+
+for (var prop in LGraphObject) {
+  LEdge[prop] = LGraphObject[prop];
+}
+
+LEdge.prototype.getSource = function () {
+  return this.source;
+};
+
+LEdge.prototype.getTarget = function () {
+  return this.target;
+};
+
+LEdge.prototype.isInterGraph = function () {
+  return this.isInterGraph;
+};
+
+LEdge.prototype.getLength = function () {
+  return this.length;
+};
+
+LEdge.prototype.isOverlapingSourceAndTarget = function () {
+  return this.isOverlapingSourceAndTarget;
+};
+
+LEdge.prototype.getBendpoints = function () {
+  return this.bendpoints;
+};
+
+LEdge.prototype.getLca = function () {
+  return this.lca;
+};
+
+LEdge.prototype.getSourceInLca = function () {
+  return this.sourceInLca;
+};
+
+LEdge.prototype.getTargetInLca = function () {
+  return this.targetInLca;
+};
+
+LEdge.prototype.getOtherEnd = function (node) {
+  if (this.source === node) {
+    return this.target;
+  } else if (this.target === node) {
+    return this.source;
+  } else {
+    throw "Node is not incident with this edge";
+  }
+};
+
+LEdge.prototype.getOtherEndInGraph = function (node, graph) {
+  var otherEnd = this.getOtherEnd(node);
+  var root = graph.getGraphManager().getRoot();
+
+  while (true) {
+    if (otherEnd.getOwner() == graph) {
+      return otherEnd;
+    }
+
+    if (otherEnd.getOwner() == root) {
+      break;
+    }
+
+    otherEnd = otherEnd.getOwner().getParent();
+  }
+
+  return null;
+};
+
+LEdge.prototype.updateLength = function () {
+  var clipPointCoordinates = new Array(4);
+
+  this.isOverlapingSourceAndTarget = IGeometry.getIntersection(this.target.getRect(), this.source.getRect(), clipPointCoordinates);
+
+  if (!this.isOverlapingSourceAndTarget) {
+    this.lengthX = clipPointCoordinates[0] - clipPointCoordinates[2];
+    this.lengthY = clipPointCoordinates[1] - clipPointCoordinates[3];
+
+    if (Math.abs(this.lengthX) < 1.0) {
+      this.lengthX = IMath.sign(this.lengthX);
+    }
+
+    if (Math.abs(this.lengthY) < 1.0) {
+      this.lengthY = IMath.sign(this.lengthY);
+    }
+
+    this.length = Math.sqrt(this.lengthX * this.lengthX + this.lengthY * this.lengthY);
+  }
+};
+
+LEdge.prototype.updateLengthSimple = function () {
+  this.lengthX = this.target.getCenterX() - this.source.getCenterX();
+  this.lengthY = this.target.getCenterY() - this.source.getCenterY();
+
+  if (Math.abs(this.lengthX) < 1.0) {
+    this.lengthX = IMath.sign(this.lengthX);
+  }
+
+  if (Math.abs(this.lengthY) < 1.0) {
+    this.lengthY = IMath.sign(this.lengthY);
+  }
+
+  this.length = Math.sqrt(this.lengthX * this.lengthX + this.lengthY * this.lengthY);
+};
+
+module.exports = LEdge;
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function LGraphObject(vGraphObject) {
+  this.vGraphObject = vGraphObject;
+}
+
+module.exports = LGraphObject;
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LGraphObject = __webpack_require__(2);
+var Integer = __webpack_require__(10);
+var RectangleD = __webpack_require__(13);
+var LayoutConstants = __webpack_require__(0);
+var RandomSeed = __webpack_require__(16);
+var PointD = __webpack_require__(4);
+
+function LNode(gm, loc, size, vNode) {
+  //Alternative constructor 1 : LNode(LGraphManager gm, Point loc, Dimension size, Object vNode)
+  if (size == null && vNode == null) {
+    vNode = loc;
+  }
+
+  LGraphObject.call(this, vNode);
+
+  //Alternative constructor 2 : LNode(Layout layout, Object vNode)
+  if (gm.graphManager != null) gm = gm.graphManager;
+
+  this.estimatedSize = Integer.MIN_VALUE;
+  this.inclusionTreeDepth = Integer.MAX_VALUE;
+  this.vGraphObject = vNode;
+  this.edges = [];
+  this.graphManager = gm;
+
+  if (size != null && loc != null) this.rect = new RectangleD(loc.x, loc.y, size.width, size.height);else this.rect = new RectangleD();
+}
+
+LNode.prototype = Object.create(LGraphObject.prototype);
+for (var prop in LGraphObject) {
+  LNode[prop] = LGraphObject[prop];
+}
+
+LNode.prototype.getEdges = function () {
+  return this.edges;
+};
+
+LNode.prototype.getChild = function () {
+  return this.child;
+};
+
+LNode.prototype.getOwner = function () {
+  //  if (this.owner != null) {
+  //    if (!(this.owner == null || this.owner.getNodes().indexOf(this) > -1)) {
+  //      throw "assert failed";
+  //    }
+  //  }
+
+  return this.owner;
+};
+
+LNode.prototype.getWidth = function () {
+  return this.rect.width;
+};
+
+LNode.prototype.setWidth = function (width) {
+  this.rect.width = width;
+};
+
+LNode.prototype.getHeight = function () {
+  return this.rect.height;
+};
+
+LNode.prototype.setHeight = function (height) {
+  this.rect.height = height;
+};
+
+LNode.prototype.getCenterX = function () {
+  return this.rect.x + this.rect.width / 2;
+};
+
+LNode.prototype.getCenterY = function () {
+  return this.rect.y + this.rect.height / 2;
+};
+
+LNode.prototype.getCenter = function () {
+  return new PointD(this.rect.x + this.rect.width / 2, this.rect.y + this.rect.height / 2);
+};
+
+LNode.prototype.getLocation = function () {
+  return new PointD(this.rect.x, this.rect.y);
+};
+
+LNode.prototype.getRect = function () {
+  return this.rect;
+};
+
+LNode.prototype.getDiagonal = function () {
+  return Math.sqrt(this.rect.width * this.rect.width + this.rect.height * this.rect.height);
+};
+
+/**
+ * This method returns half the diagonal length of this node.
+ */
+LNode.prototype.getHalfTheDiagonal = function () {
+  return Math.sqrt(this.rect.height * this.rect.height + this.rect.width * this.rect.width) / 2;
+};
+
+LNode.prototype.setRect = function (upperLeft, dimension) {
+  this.rect.x = upperLeft.x;
+  this.rect.y = upperLeft.y;
+  this.rect.width = dimension.width;
+  this.rect.height = dimension.height;
+};
+
+LNode.prototype.setCenter = function (cx, cy) {
+  this.rect.x = cx - this.rect.width / 2;
+  this.rect.y = cy - this.rect.height / 2;
+};
+
+LNode.prototype.setLocation = function (x, y) {
+  this.rect.x = x;
+  this.rect.y = y;
+};
+
+LNode.prototype.moveBy = function (dx, dy) {
+  this.rect.x += dx;
+  this.rect.y += dy;
+};
+
+LNode.prototype.getEdgeListToNode = function (to) {
+  var edgeList = [];
+  var edge;
+  var self = this;
+
+  self.edges.forEach(function (edge) {
+
+    if (edge.target == to) {
+      if (edge.source != self) throw "Incorrect edge source!";
+
+      edgeList.push(edge);
+    }
+  });
+
+  return edgeList;
+};
+
+LNode.prototype.getEdgesBetween = function (other) {
+  var edgeList = [];
+  var edge;
+
+  var self = this;
+  self.edges.forEach(function (edge) {
+
+    if (!(edge.source == self || edge.target == self)) throw "Incorrect edge source and/or target";
+
+    if (edge.target == other || edge.source == other) {
+      edgeList.push(edge);
+    }
+  });
+
+  return edgeList;
+};
+
+LNode.prototype.getNeighborsList = function () {
+  var neighbors = new Set();
+
+  var self = this;
+  self.edges.forEach(function (edge) {
+
+    if (edge.source == self) {
+      neighbors.add(edge.target);
+    } else {
+      if (edge.target != self) {
+        throw "Incorrect incidency!";
+      }
+
+      neighbors.add(edge.source);
+    }
+  });
+
+  return neighbors;
+};
+
+LNode.prototype.withChildren = function () {
+  var withNeighborsList = new Set();
+  var childNode;
+  var children;
+
+  withNeighborsList.add(this);
+
+  if (this.child != null) {
+    var nodes = this.child.getNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      childNode = nodes[i];
+      children = childNode.withChildren();
+      children.forEach(function (node) {
+        withNeighborsList.add(node);
+      });
+    }
+  }
+
+  return withNeighborsList;
+};
+
+LNode.prototype.getNoOfChildren = function () {
+  var noOfChildren = 0;
+  var childNode;
+
+  if (this.child == null) {
+    noOfChildren = 1;
+  } else {
+    var nodes = this.child.getNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      childNode = nodes[i];
+
+      noOfChildren += childNode.getNoOfChildren();
+    }
+  }
+
+  if (noOfChildren == 0) {
+    noOfChildren = 1;
+  }
+  return noOfChildren;
+};
+
+LNode.prototype.getEstimatedSize = function () {
+  if (this.estimatedSize == Integer.MIN_VALUE) {
+    throw "assert failed";
+  }
+  return this.estimatedSize;
+};
+
+LNode.prototype.calcEstimatedSize = function () {
+  if (this.child == null) {
+    return this.estimatedSize = (this.rect.width + this.rect.height) / 2;
+  } else {
+    this.estimatedSize = this.child.calcEstimatedSize();
+    this.rect.width = this.estimatedSize;
+    this.rect.height = this.estimatedSize;
+
+    return this.estimatedSize;
+  }
+};
+
+LNode.prototype.scatter = function () {
+  var randomCenterX;
+  var randomCenterY;
+
+  var minX = -LayoutConstants.INITIAL_WORLD_BOUNDARY;
+  var maxX = LayoutConstants.INITIAL_WORLD_BOUNDARY;
+  randomCenterX = LayoutConstants.WORLD_CENTER_X + RandomSeed.nextDouble() * (maxX - minX) + minX;
+
+  var minY = -LayoutConstants.INITIAL_WORLD_BOUNDARY;
+  var maxY = LayoutConstants.INITIAL_WORLD_BOUNDARY;
+  randomCenterY = LayoutConstants.WORLD_CENTER_Y + RandomSeed.nextDouble() * (maxY - minY) + minY;
+
+  this.rect.x = randomCenterX;
+  this.rect.y = randomCenterY;
+};
+
+LNode.prototype.updateBounds = function () {
+  if (this.getChild() == null) {
+    throw "assert failed";
+  }
+  if (this.getChild().getNodes().length != 0) {
+    // wrap the children nodes by re-arranging the boundaries
+    var childGraph = this.getChild();
+    childGraph.updateBounds(true);
+
+    this.rect.x = childGraph.getLeft();
+    this.rect.y = childGraph.getTop();
+
+    this.setWidth(childGraph.getRight() - childGraph.getLeft());
+    this.setHeight(childGraph.getBottom() - childGraph.getTop());
+
+    // Update compound bounds considering its label properties    
+    if (LayoutConstants.NODE_DIMENSIONS_INCLUDE_LABELS) {
+
+      var width = childGraph.getRight() - childGraph.getLeft();
+      var height = childGraph.getBottom() - childGraph.getTop();
+
+      if (this.labelWidth > width) {
+        this.rect.x -= (this.labelWidth - width) / 2;
+        this.setWidth(this.labelWidth);
+      }
+
+      if (this.labelHeight > height) {
+        if (this.labelPos == "center") {
+          this.rect.y -= (this.labelHeight - height) / 2;
+        } else if (this.labelPos == "top") {
+          this.rect.y -= this.labelHeight - height;
+        }
+        this.setHeight(this.labelHeight);
+      }
+    }
+  }
+};
+
+LNode.prototype.getInclusionTreeDepth = function () {
+  if (this.inclusionTreeDepth == Integer.MAX_VALUE) {
+    throw "assert failed";
+  }
+  return this.inclusionTreeDepth;
+};
+
+LNode.prototype.transform = function (trans) {
+  var left = this.rect.x;
+
+  if (left > LayoutConstants.WORLD_BOUNDARY) {
+    left = LayoutConstants.WORLD_BOUNDARY;
+  } else if (left < -LayoutConstants.WORLD_BOUNDARY) {
+    left = -LayoutConstants.WORLD_BOUNDARY;
+  }
+
+  var top = this.rect.y;
+
+  if (top > LayoutConstants.WORLD_BOUNDARY) {
+    top = LayoutConstants.WORLD_BOUNDARY;
+  } else if (top < -LayoutConstants.WORLD_BOUNDARY) {
+    top = -LayoutConstants.WORLD_BOUNDARY;
+  }
+
+  var leftTop = new PointD(left, top);
+  var vLeftTop = trans.inverseTransformPoint(leftTop);
+
+  this.setLocation(vLeftTop.x, vLeftTop.y);
+};
+
+LNode.prototype.getLeft = function () {
+  return this.rect.x;
+};
+
+LNode.prototype.getRight = function () {
+  return this.rect.x + this.rect.width;
+};
+
+LNode.prototype.getTop = function () {
+  return this.rect.y;
+};
+
+LNode.prototype.getBottom = function () {
+  return this.rect.y + this.rect.height;
+};
+
+LNode.prototype.getParent = function () {
+  if (this.owner == null) {
+    return null;
+  }
+
+  return this.owner.getParent();
+};
+
+module.exports = LNode;
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function PointD(x, y) {
+  if (x == null && y == null) {
+    this.x = 0;
+    this.y = 0;
+  } else {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+PointD.prototype.getX = function () {
+  return this.x;
+};
+
+PointD.prototype.getY = function () {
+  return this.y;
+};
+
+PointD.prototype.setX = function (x) {
+  this.x = x;
+};
+
+PointD.prototype.setY = function (y) {
+  this.y = y;
+};
+
+PointD.prototype.getDifference = function (pt) {
+  return new DimensionD(this.x - pt.x, this.y - pt.y);
+};
+
+PointD.prototype.getCopy = function () {
+  return new PointD(this.x, this.y);
+};
+
+PointD.prototype.translate = function (dim) {
+  this.x += dim.width;
+  this.y += dim.height;
+  return this;
+};
+
+module.exports = PointD;
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LGraphObject = __webpack_require__(2);
+var Integer = __webpack_require__(10);
+var LayoutConstants = __webpack_require__(0);
+var LGraphManager = __webpack_require__(6);
+var LNode = __webpack_require__(3);
+var LEdge = __webpack_require__(1);
+var RectangleD = __webpack_require__(13);
+var Point = __webpack_require__(12);
+var LinkedList = __webpack_require__(11);
+
+function LGraph(parent, obj2, vGraph) {
+  LGraphObject.call(this, vGraph);
+  this.estimatedSize = Integer.MIN_VALUE;
+  this.margin = LayoutConstants.DEFAULT_GRAPH_MARGIN;
+  this.edges = [];
+  this.nodes = [];
+  this.isConnected = false;
+  this.parent = parent;
+
+  if (obj2 != null && obj2 instanceof LGraphManager) {
+    this.graphManager = obj2;
+  } else if (obj2 != null && obj2 instanceof Layout) {
+    this.graphManager = obj2.graphManager;
+  }
+}
+
+LGraph.prototype = Object.create(LGraphObject.prototype);
+for (var prop in LGraphObject) {
+  LGraph[prop] = LGraphObject[prop];
+}
+
+LGraph.prototype.getNodes = function () {
+  return this.nodes;
+};
+
+LGraph.prototype.getEdges = function () {
+  return this.edges;
+};
+
+LGraph.prototype.getGraphManager = function () {
+  return this.graphManager;
+};
+
+LGraph.prototype.getParent = function () {
+  return this.parent;
+};
+
+LGraph.prototype.getLeft = function () {
+  return this.left;
+};
+
+LGraph.prototype.getRight = function () {
+  return this.right;
+};
+
+LGraph.prototype.getTop = function () {
+  return this.top;
+};
+
+LGraph.prototype.getBottom = function () {
+  return this.bottom;
+};
+
+LGraph.prototype.isConnected = function () {
+  return this.isConnected;
+};
+
+LGraph.prototype.add = function (obj1, sourceNode, targetNode) {
+  if (sourceNode == null && targetNode == null) {
+    var newNode = obj1;
+    if (this.graphManager == null) {
+      throw "Graph has no graph mgr!";
+    }
+    if (this.getNodes().indexOf(newNode) > -1) {
+      throw "Node already in graph!";
+    }
+    newNode.owner = this;
+    this.getNodes().push(newNode);
+
+    return newNode;
+  } else {
+    var newEdge = obj1;
+    if (!(this.getNodes().indexOf(sourceNode) > -1 && this.getNodes().indexOf(targetNode) > -1)) {
+      throw "Source or target not in graph!";
+    }
+
+    if (!(sourceNode.owner == targetNode.owner && sourceNode.owner == this)) {
+      throw "Both owners must be this graph!";
+    }
+
+    if (sourceNode.owner != targetNode.owner) {
+      return null;
+    }
+
+    // set source and target
+    newEdge.source = sourceNode;
+    newEdge.target = targetNode;
+
+    // set as intra-graph edge
+    newEdge.isInterGraph = false;
+
+    // add to graph edge list
+    this.getEdges().push(newEdge);
+
+    // add to incidency lists
+    sourceNode.edges.push(newEdge);
+
+    if (targetNode != sourceNode) {
+      targetNode.edges.push(newEdge);
+    }
+
+    return newEdge;
+  }
+};
+
+LGraph.prototype.remove = function (obj) {
+  var node = obj;
+  if (obj instanceof LNode) {
+    if (node == null) {
+      throw "Node is null!";
+    }
+    if (!(node.owner != null && node.owner == this)) {
+      throw "Owner graph is invalid!";
+    }
+    if (this.graphManager == null) {
+      throw "Owner graph manager is invalid!";
+    }
+    // remove incident edges first (make a copy to do it safely)
+    var edgesToBeRemoved = node.edges.slice();
+    var edge;
+    var s = edgesToBeRemoved.length;
+    for (var i = 0; i < s; i++) {
+      edge = edgesToBeRemoved[i];
+
+      if (edge.isInterGraph) {
+        this.graphManager.remove(edge);
+      } else {
+        edge.source.owner.remove(edge);
+      }
+    }
+
+    // now the node itself
+    var index = this.nodes.indexOf(node);
+    if (index == -1) {
+      throw "Node not in owner node list!";
+    }
+
+    this.nodes.splice(index, 1);
+  } else if (obj instanceof LEdge) {
+    var edge = obj;
+    if (edge == null) {
+      throw "Edge is null!";
+    }
+    if (!(edge.source != null && edge.target != null)) {
+      throw "Source and/or target is null!";
+    }
+    if (!(edge.source.owner != null && edge.target.owner != null && edge.source.owner == this && edge.target.owner == this)) {
+      throw "Source and/or target owner is invalid!";
+    }
+
+    var sourceIndex = edge.source.edges.indexOf(edge);
+    var targetIndex = edge.target.edges.indexOf(edge);
+    if (!(sourceIndex > -1 && targetIndex > -1)) {
+      throw "Source and/or target doesn't know this edge!";
+    }
+
+    edge.source.edges.splice(sourceIndex, 1);
+
+    if (edge.target != edge.source) {
+      edge.target.edges.splice(targetIndex, 1);
+    }
+
+    var index = edge.source.owner.getEdges().indexOf(edge);
+    if (index == -1) {
+      throw "Not in owner's edge list!";
+    }
+
+    edge.source.owner.getEdges().splice(index, 1);
+  }
+};
+
+LGraph.prototype.updateLeftTop = function () {
+  var top = Integer.MAX_VALUE;
+  var left = Integer.MAX_VALUE;
+  var nodeTop;
+  var nodeLeft;
+  var margin;
+
+  var nodes = this.getNodes();
+  var s = nodes.length;
+
+  for (var i = 0; i < s; i++) {
+    var lNode = nodes[i];
+    nodeTop = lNode.getTop();
+    nodeLeft = lNode.getLeft();
+
+    if (top > nodeTop) {
+      top = nodeTop;
+    }
+
+    if (left > nodeLeft) {
+      left = nodeLeft;
+    }
+  }
+
+  // Do we have any nodes in this graph?
+  if (top == Integer.MAX_VALUE) {
+    return null;
+  }
+
+  if (nodes[0].getParent().paddingLeft != undefined) {
+    margin = nodes[0].getParent().paddingLeft;
+  } else {
+    margin = this.margin;
+  }
+
+  this.left = left - margin;
+  this.top = top - margin;
+
+  // Apply the margins and return the result
+  return new Point(this.left, this.top);
+};
+
+LGraph.prototype.updateBounds = function (recursive) {
+  // calculate bounds
+  var left = Integer.MAX_VALUE;
+  var right = -Integer.MAX_VALUE;
+  var top = Integer.MAX_VALUE;
+  var bottom = -Integer.MAX_VALUE;
+  var nodeLeft;
+  var nodeRight;
+  var nodeTop;
+  var nodeBottom;
+  var margin;
+
+  var nodes = this.nodes;
+  var s = nodes.length;
+  for (var i = 0; i < s; i++) {
+    var lNode = nodes[i];
+
+    if (recursive && lNode.child != null) {
+      lNode.updateBounds();
+    }
+    nodeLeft = lNode.getLeft();
+    nodeRight = lNode.getRight();
+    nodeTop = lNode.getTop();
+    nodeBottom = lNode.getBottom();
+
+    if (left > nodeLeft) {
+      left = nodeLeft;
+    }
+
+    if (right < nodeRight) {
+      right = nodeRight;
+    }
+
+    if (top > nodeTop) {
+      top = nodeTop;
+    }
+
+    if (bottom < nodeBottom) {
+      bottom = nodeBottom;
+    }
+  }
+
+  var boundingRect = new RectangleD(left, top, right - left, bottom - top);
+  if (left == Integer.MAX_VALUE) {
+    this.left = this.parent.getLeft();
+    this.right = this.parent.getRight();
+    this.top = this.parent.getTop();
+    this.bottom = this.parent.getBottom();
+  }
+
+  if (nodes[0].getParent().paddingLeft != undefined) {
+    margin = nodes[0].getParent().paddingLeft;
+  } else {
+    margin = this.margin;
+  }
+
+  this.left = boundingRect.x - margin;
+  this.right = boundingRect.x + boundingRect.width + margin;
+  this.top = boundingRect.y - margin;
+  this.bottom = boundingRect.y + boundingRect.height + margin;
+};
+
+LGraph.calculateBounds = function (nodes) {
+  var left = Integer.MAX_VALUE;
+  var right = -Integer.MAX_VALUE;
+  var top = Integer.MAX_VALUE;
+  var bottom = -Integer.MAX_VALUE;
+  var nodeLeft;
+  var nodeRight;
+  var nodeTop;
+  var nodeBottom;
+
+  var s = nodes.length;
+
+  for (var i = 0; i < s; i++) {
+    var lNode = nodes[i];
+    nodeLeft = lNode.getLeft();
+    nodeRight = lNode.getRight();
+    nodeTop = lNode.getTop();
+    nodeBottom = lNode.getBottom();
+
+    if (left > nodeLeft) {
+      left = nodeLeft;
+    }
+
+    if (right < nodeRight) {
+      right = nodeRight;
+    }
+
+    if (top > nodeTop) {
+      top = nodeTop;
+    }
+
+    if (bottom < nodeBottom) {
+      bottom = nodeBottom;
+    }
+  }
+
+  var boundingRect = new RectangleD(left, top, right - left, bottom - top);
+
+  return boundingRect;
+};
+
+LGraph.prototype.getInclusionTreeDepth = function () {
+  if (this == this.graphManager.getRoot()) {
+    return 1;
+  } else {
+    return this.parent.getInclusionTreeDepth();
+  }
+};
+
+LGraph.prototype.getEstimatedSize = function () {
+  if (this.estimatedSize == Integer.MIN_VALUE) {
+    throw "assert failed";
+  }
+  return this.estimatedSize;
+};
+
+LGraph.prototype.calcEstimatedSize = function () {
+  var size = 0;
+  var nodes = this.nodes;
+  var s = nodes.length;
+
+  for (var i = 0; i < s; i++) {
+    var lNode = nodes[i];
+    size += lNode.calcEstimatedSize();
+  }
+
+  if (size == 0) {
+    this.estimatedSize = LayoutConstants.EMPTY_COMPOUND_NODE_SIZE;
+  } else {
+    this.estimatedSize = size / Math.sqrt(this.nodes.length);
+  }
+
+  return this.estimatedSize;
+};
+
+LGraph.prototype.updateConnected = function () {
+  var self = this;
+  if (this.nodes.length == 0) {
+    this.isConnected = true;
+    return;
+  }
+
+  var queue = new LinkedList();
+  var visited = new Set();
+  var currentNode = this.nodes[0];
+  var neighborEdges;
+  var currentNeighbor;
+  var childrenOfNode = currentNode.withChildren();
+  childrenOfNode.forEach(function (node) {
+    queue.push(node);
+    visited.add(node);
+  });
+
+  while (queue.length !== 0) {
+    currentNode = queue.shift();
+
+    // Traverse all neighbors of this node
+    neighborEdges = currentNode.getEdges();
+    var size = neighborEdges.length;
+    for (var i = 0; i < size; i++) {
+      var neighborEdge = neighborEdges[i];
+      currentNeighbor = neighborEdge.getOtherEndInGraph(currentNode, this);
+
+      // Add unvisited neighbors to the list to visit
+      if (currentNeighbor != null && !visited.has(currentNeighbor)) {
+        var childrenOfNeighbor = currentNeighbor.withChildren();
+
+        childrenOfNeighbor.forEach(function (node) {
+          queue.push(node);
+          visited.add(node);
+        });
+      }
+    }
+  }
+
+  this.isConnected = false;
+
+  if (visited.size >= this.nodes.length) {
+    var noOfVisitedInThisGraph = 0;
+
+    visited.forEach(function (visitedNode) {
+      if (visitedNode.owner == self) {
+        noOfVisitedInThisGraph++;
+      }
+    });
+
+    if (noOfVisitedInThisGraph == this.nodes.length) {
+      this.isConnected = true;
+    }
+  }
+};
+
+module.exports = LGraph;
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LGraph;
+var LEdge = __webpack_require__(1);
+
+function LGraphManager(layout) {
+  LGraph = __webpack_require__(5); // It may be better to initilize this out of this function but it gives an error (Right-hand side of 'instanceof' is not callable) now.
+  this.layout = layout;
+
+  this.graphs = [];
+  this.edges = [];
+}
+
+LGraphManager.prototype.addRoot = function () {
+  var ngraph = this.layout.newGraph();
+  var nnode = this.layout.newNode(null);
+  var root = this.add(ngraph, nnode);
+  this.setRootGraph(root);
+  return this.rootGraph;
+};
+
+LGraphManager.prototype.add = function (newGraph, parentNode, newEdge, sourceNode, targetNode) {
+  //there are just 2 parameters are passed then it adds an LGraph else it adds an LEdge
+  if (newEdge == null && sourceNode == null && targetNode == null) {
+    if (newGraph == null) {
+      throw "Graph is null!";
+    }
+    if (parentNode == null) {
+      throw "Parent node is null!";
+    }
+    if (this.graphs.indexOf(newGraph) > -1) {
+      throw "Graph already in this graph mgr!";
+    }
+
+    this.graphs.push(newGraph);
+
+    if (newGraph.parent != null) {
+      throw "Already has a parent!";
+    }
+    if (parentNode.child != null) {
+      throw "Already has a child!";
+    }
+
+    newGraph.parent = parentNode;
+    parentNode.child = newGraph;
+
+    return newGraph;
+  } else {
+    //change the order of the parameters
+    targetNode = newEdge;
+    sourceNode = parentNode;
+    newEdge = newGraph;
+    var sourceGraph = sourceNode.getOwner();
+    var targetGraph = targetNode.getOwner();
+
+    if (!(sourceGraph != null && sourceGraph.getGraphManager() == this)) {
+      throw "Source not in this graph mgr!";
+    }
+    if (!(targetGraph != null && targetGraph.getGraphManager() == this)) {
+      throw "Target not in this graph mgr!";
+    }
+
+    if (sourceGraph == targetGraph) {
+      newEdge.isInterGraph = false;
+      return sourceGraph.add(newEdge, sourceNode, targetNode);
+    } else {
+      newEdge.isInterGraph = true;
+
+      // set source and target
+      newEdge.source = sourceNode;
+      newEdge.target = targetNode;
+
+      // add edge to inter-graph edge list
+      if (this.edges.indexOf(newEdge) > -1) {
+        throw "Edge already in inter-graph edge list!";
+      }
+
+      this.edges.push(newEdge);
+
+      // add edge to source and target incidency lists
+      if (!(newEdge.source != null && newEdge.target != null)) {
+        throw "Edge source and/or target is null!";
+      }
+
+      if (!(newEdge.source.edges.indexOf(newEdge) == -1 && newEdge.target.edges.indexOf(newEdge) == -1)) {
+        throw "Edge already in source and/or target incidency list!";
+      }
+
+      newEdge.source.edges.push(newEdge);
+      newEdge.target.edges.push(newEdge);
+
+      return newEdge;
+    }
+  }
+};
+
+LGraphManager.prototype.remove = function (lObj) {
+  if (lObj instanceof LGraph) {
+    var graph = lObj;
+    if (graph.getGraphManager() != this) {
+      throw "Graph not in this graph mgr";
+    }
+    if (!(graph == this.rootGraph || graph.parent != null && graph.parent.graphManager == this)) {
+      throw "Invalid parent node!";
+    }
+
+    // first the edges (make a copy to do it safely)
+    var edgesToBeRemoved = [];
+
+    edgesToBeRemoved = edgesToBeRemoved.concat(graph.getEdges());
+
+    var edge;
+    var s = edgesToBeRemoved.length;
+    for (var i = 0; i < s; i++) {
+      edge = edgesToBeRemoved[i];
+      graph.remove(edge);
+    }
+
+    // then the nodes (make a copy to do it safely)
+    var nodesToBeRemoved = [];
+
+    nodesToBeRemoved = nodesToBeRemoved.concat(graph.getNodes());
+
+    var node;
+    s = nodesToBeRemoved.length;
+    for (var i = 0; i < s; i++) {
+      node = nodesToBeRemoved[i];
+      graph.remove(node);
+    }
+
+    // check if graph is the root
+    if (graph == this.rootGraph) {
+      this.setRootGraph(null);
+    }
+
+    // now remove the graph itself
+    var index = this.graphs.indexOf(graph);
+    this.graphs.splice(index, 1);
+
+    // also reset the parent of the graph
+    graph.parent = null;
+  } else if (lObj instanceof LEdge) {
+    edge = lObj;
+    if (edge == null) {
+      throw "Edge is null!";
+    }
+    if (!edge.isInterGraph) {
+      throw "Not an inter-graph edge!";
+    }
+    if (!(edge.source != null && edge.target != null)) {
+      throw "Source and/or target is null!";
+    }
+
+    // remove edge from source and target nodes' incidency lists
+
+    if (!(edge.source.edges.indexOf(edge) != -1 && edge.target.edges.indexOf(edge) != -1)) {
+      throw "Source and/or target doesn't know this edge!";
+    }
+
+    var index = edge.source.edges.indexOf(edge);
+    edge.source.edges.splice(index, 1);
+    index = edge.target.edges.indexOf(edge);
+    edge.target.edges.splice(index, 1);
+
+    // remove edge from owner graph manager's inter-graph edge list
+
+    if (!(edge.source.owner != null && edge.source.owner.getGraphManager() != null)) {
+      throw "Edge owner graph or owner graph manager is null!";
+    }
+    if (edge.source.owner.getGraphManager().edges.indexOf(edge) == -1) {
+      throw "Not in owner graph manager's edge list!";
+    }
+
+    var index = edge.source.owner.getGraphManager().edges.indexOf(edge);
+    edge.source.owner.getGraphManager().edges.splice(index, 1);
+  }
+};
+
+LGraphManager.prototype.updateBounds = function () {
+  this.rootGraph.updateBounds(true);
+};
+
+LGraphManager.prototype.getGraphs = function () {
+  return this.graphs;
+};
+
+LGraphManager.prototype.getAllNodes = function () {
+  if (this.allNodes == null) {
+    var nodeList = [];
+    var graphs = this.getGraphs();
+    var s = graphs.length;
+    for (var i = 0; i < s; i++) {
+      nodeList = nodeList.concat(graphs[i].getNodes());
+    }
+    this.allNodes = nodeList;
+  }
+  return this.allNodes;
+};
+
+LGraphManager.prototype.resetAllNodes = function () {
+  this.allNodes = null;
+};
+
+LGraphManager.prototype.resetAllEdges = function () {
+  this.allEdges = null;
+};
+
+LGraphManager.prototype.resetAllNodesToApplyGravitation = function () {
+  this.allNodesToApplyGravitation = null;
+};
+
+LGraphManager.prototype.getAllEdges = function () {
+  if (this.allEdges == null) {
+    var edgeList = [];
+    var graphs = this.getGraphs();
+    var s = graphs.length;
+    for (var i = 0; i < graphs.length; i++) {
+      edgeList = edgeList.concat(graphs[i].getEdges());
+    }
+
+    edgeList = edgeList.concat(this.edges);
+
+    this.allEdges = edgeList;
+  }
+  return this.allEdges;
+};
+
+LGraphManager.prototype.getAllNodesToApplyGravitation = function () {
+  return this.allNodesToApplyGravitation;
+};
+
+LGraphManager.prototype.setAllNodesToApplyGravitation = function (nodeList) {
+  if (this.allNodesToApplyGravitation != null) {
+    throw "assert failed";
+  }
+
+  this.allNodesToApplyGravitation = nodeList;
+};
+
+LGraphManager.prototype.getRoot = function () {
+  return this.rootGraph;
+};
+
+LGraphManager.prototype.setRootGraph = function (graph) {
+  if (graph.getGraphManager() != this) {
+    throw "Root not in this graph mgr!";
+  }
+
+  this.rootGraph = graph;
+  // root graph must have a root node associated with it for convenience
+  if (graph.parent == null) {
+    graph.parent = this.layout.newNode("Root node");
+  }
+};
+
+LGraphManager.prototype.getLayout = function () {
+  return this.layout;
+};
+
+LGraphManager.prototype.isOneAncestorOfOther = function (firstNode, secondNode) {
+  if (!(firstNode != null && secondNode != null)) {
+    throw "assert failed";
+  }
+
+  if (firstNode == secondNode) {
+    return true;
+  }
+  // Is second node an ancestor of the first one?
+  var ownerGraph = firstNode.getOwner();
+  var parentNode;
+
+  do {
+    parentNode = ownerGraph.getParent();
+
+    if (parentNode == null) {
+      break;
+    }
+
+    if (parentNode == secondNode) {
+      return true;
+    }
+
+    ownerGraph = parentNode.getOwner();
+    if (ownerGraph == null) {
+      break;
+    }
+  } while (true);
+  // Is first node an ancestor of the second one?
+  ownerGraph = secondNode.getOwner();
+
+  do {
+    parentNode = ownerGraph.getParent();
+
+    if (parentNode == null) {
+      break;
+    }
+
+    if (parentNode == firstNode) {
+      return true;
+    }
+
+    ownerGraph = parentNode.getOwner();
+    if (ownerGraph == null) {
+      break;
+    }
+  } while (true);
+
+  return false;
+};
+
+LGraphManager.prototype.calcLowestCommonAncestors = function () {
+  var edge;
+  var sourceNode;
+  var targetNode;
+  var sourceAncestorGraph;
+  var targetAncestorGraph;
+
+  var edges = this.getAllEdges();
+  var s = edges.length;
+  for (var i = 0; i < s; i++) {
+    edge = edges[i];
+
+    sourceNode = edge.source;
+    targetNode = edge.target;
+    edge.lca = null;
+    edge.sourceInLca = sourceNode;
+    edge.targetInLca = targetNode;
+
+    if (sourceNode == targetNode) {
+      edge.lca = sourceNode.getOwner();
+      continue;
+    }
+
+    sourceAncestorGraph = sourceNode.getOwner();
+
+    while (edge.lca == null) {
+      edge.targetInLca = targetNode;
+      targetAncestorGraph = targetNode.getOwner();
+
+      while (edge.lca == null) {
+        if (targetAncestorGraph == sourceAncestorGraph) {
+          edge.lca = targetAncestorGraph;
+          break;
+        }
+
+        if (targetAncestorGraph == this.rootGraph) {
+          break;
+        }
+
+        if (edge.lca != null) {
+          throw "assert failed";
+        }
+        edge.targetInLca = targetAncestorGraph.getParent();
+        targetAncestorGraph = edge.targetInLca.getOwner();
+      }
+
+      if (sourceAncestorGraph == this.rootGraph) {
+        break;
+      }
+
+      if (edge.lca == null) {
+        edge.sourceInLca = sourceAncestorGraph.getParent();
+        sourceAncestorGraph = edge.sourceInLca.getOwner();
+      }
+    }
+
+    if (edge.lca == null) {
+      throw "assert failed";
+    }
+  }
+};
+
+LGraphManager.prototype.calcLowestCommonAncestor = function (firstNode, secondNode) {
+  if (firstNode == secondNode) {
+    return firstNode.getOwner();
+  }
+  var firstOwnerGraph = firstNode.getOwner();
+
+  do {
+    if (firstOwnerGraph == null) {
+      break;
+    }
+    var secondOwnerGraph = secondNode.getOwner();
+
+    do {
+      if (secondOwnerGraph == null) {
+        break;
+      }
+
+      if (secondOwnerGraph == firstOwnerGraph) {
+        return secondOwnerGraph;
+      }
+      secondOwnerGraph = secondOwnerGraph.getParent().getOwner();
+    } while (true);
+
+    firstOwnerGraph = firstOwnerGraph.getParent().getOwner();
+  } while (true);
+
+  return firstOwnerGraph;
+};
+
+LGraphManager.prototype.calcInclusionTreeDepths = function (graph, depth) {
+  if (graph == null && depth == null) {
+    graph = this.rootGraph;
+    depth = 1;
+  }
+  var node;
+
+  var nodes = graph.getNodes();
+  var s = nodes.length;
+  for (var i = 0; i < s; i++) {
+    node = nodes[i];
+    node.inclusionTreeDepth = depth;
+
+    if (node.child != null) {
+      this.calcInclusionTreeDepths(node.child, depth + 1);
+    }
+  }
+};
+
+LGraphManager.prototype.includesInvalidEdge = function () {
+  var edge;
+
+  var s = this.edges.length;
+  for (var i = 0; i < s; i++) {
+    edge = this.edges[i];
+
+    if (this.isOneAncestorOfOther(edge.source, edge.target)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+module.exports = LGraphManager;
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LayoutConstants = __webpack_require__(0);
+
+function FDLayoutConstants() {}
+
+//FDLayoutConstants inherits static props in LayoutConstants
+for (var prop in LayoutConstants) {
+  FDLayoutConstants[prop] = LayoutConstants[prop];
+}
+
+FDLayoutConstants.MAX_ITERATIONS = 2500;
+
+FDLayoutConstants.DEFAULT_EDGE_LENGTH = 50;
+FDLayoutConstants.DEFAULT_SPRING_STRENGTH = 0.45;
+FDLayoutConstants.DEFAULT_REPULSION_STRENGTH = 4500.0;
+FDLayoutConstants.DEFAULT_GRAVITY_STRENGTH = 0.4;
+FDLayoutConstants.DEFAULT_COMPOUND_GRAVITY_STRENGTH = 1.0;
+FDLayoutConstants.DEFAULT_GRAVITY_RANGE_FACTOR = 3.8;
+FDLayoutConstants.DEFAULT_COMPOUND_GRAVITY_RANGE_FACTOR = 1.5;
+FDLayoutConstants.DEFAULT_USE_SMART_IDEAL_EDGE_LENGTH_CALCULATION = true;
+FDLayoutConstants.DEFAULT_USE_SMART_REPULSION_RANGE_CALCULATION = true;
+FDLayoutConstants.DEFAULT_COOLING_FACTOR_INCREMENTAL = 0.3;
+FDLayoutConstants.COOLING_ADAPTATION_FACTOR = 0.33;
+FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT = 1000;
+FDLayoutConstants.ADAPTATION_UPPER_NODE_LIMIT = 5000;
+FDLayoutConstants.MAX_NODE_DISPLACEMENT_INCREMENTAL = 100.0;
+FDLayoutConstants.MAX_NODE_DISPLACEMENT = FDLayoutConstants.MAX_NODE_DISPLACEMENT_INCREMENTAL * 3;
+FDLayoutConstants.MIN_REPULSION_DIST = FDLayoutConstants.DEFAULT_EDGE_LENGTH / 10.0;
+FDLayoutConstants.CONVERGENCE_CHECK_PERIOD = 100;
+FDLayoutConstants.PER_LEVEL_IDEAL_EDGE_LENGTH_FACTOR = 0.1;
+FDLayoutConstants.MIN_EDGE_LENGTH = 1;
+FDLayoutConstants.GRID_CALCULATION_CHECK_PERIOD = 10;
+
+module.exports = FDLayoutConstants;
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * This class maintains a list of static geometry related utility methods.
+ *
+ *
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
+
+var Point = __webpack_require__(12);
+
+function IGeometry() {}
+
+/**
+ * This method calculates *half* the amount in x and y directions of the two
+ * input rectangles needed to separate them keeping their respective
+ * positioning, and returns the result in the input array. An input
+ * separation buffer added to the amount in both directions. We assume that
+ * the two rectangles do intersect.
+ */
+IGeometry.calcSeparationAmount = function (rectA, rectB, overlapAmount, separationBuffer) {
+  if (!rectA.intersects(rectB)) {
+    throw "assert failed";
+  }
+
+  var directions = new Array(2);
+
+  this.decideDirectionsForOverlappingNodes(rectA, rectB, directions);
+
+  overlapAmount[0] = Math.min(rectA.getRight(), rectB.getRight()) - Math.max(rectA.x, rectB.x);
+  overlapAmount[1] = Math.min(rectA.getBottom(), rectB.getBottom()) - Math.max(rectA.y, rectB.y);
+
+  // update the overlapping amounts for the following cases:
+  if (rectA.getX() <= rectB.getX() && rectA.getRight() >= rectB.getRight()) {
+    /* Case x.1:
+    *
+    * rectA
+    * 	|                       |
+    * 	|        _________      |
+    * 	|        |       |      |
+    * 	|________|_______|______|
+    * 			 |       |
+    *           |       |
+    *        rectB
+    */
+    overlapAmount[0] += Math.min(rectB.getX() - rectA.getX(), rectA.getRight() - rectB.getRight());
+  } else if (rectB.getX() <= rectA.getX() && rectB.getRight() >= rectA.getRight()) {
+    /* Case x.2:
+    *
+    * rectB
+    * 	|                       |
+    * 	|        _________      |
+    * 	|        |       |      |
+    * 	|________|_______|______|
+    * 			 |       |
+    *           |       |
+    *        rectA
+    */
+    overlapAmount[0] += Math.min(rectA.getX() - rectB.getX(), rectB.getRight() - rectA.getRight());
+  }
+  if (rectA.getY() <= rectB.getY() && rectA.getBottom() >= rectB.getBottom()) {
+    /* Case y.1:
+     *          ________ rectA
+     *         |
+     *         |
+     *   ______|____  rectB
+     *         |    |
+     *         |    |
+     *   ______|____|
+     *         |
+     *         |
+     *         |________
+     *
+     */
+    overlapAmount[1] += Math.min(rectB.getY() - rectA.getY(), rectA.getBottom() - rectB.getBottom());
+  } else if (rectB.getY() <= rectA.getY() && rectB.getBottom() >= rectA.getBottom()) {
+    /* Case y.2:
+    *          ________ rectB
+    *         |
+    *         |
+    *   ______|____  rectA
+    *         |    |
+    *         |    |
+    *   ______|____|
+    *         |
+    *         |
+    *         |________
+    *
+    */
+    overlapAmount[1] += Math.min(rectA.getY() - rectB.getY(), rectB.getBottom() - rectA.getBottom());
+  }
+
+  // find slope of the line passes two centers
+  var slope = Math.abs((rectB.getCenterY() - rectA.getCenterY()) / (rectB.getCenterX() - rectA.getCenterX()));
+  // if centers are overlapped
+  if (rectB.getCenterY() === rectA.getCenterY() && rectB.getCenterX() === rectA.getCenterX()) {
+    // assume the slope is 1 (45 degree)
+    slope = 1.0;
+  }
+
+  var moveByY = slope * overlapAmount[0];
+  var moveByX = overlapAmount[1] / slope;
+  if (overlapAmount[0] < moveByX) {
+    moveByX = overlapAmount[0];
+  } else {
+    moveByY = overlapAmount[1];
+  }
+  // return half the amount so that if each rectangle is moved by these
+  // amounts in opposite directions, overlap will be resolved
+  overlapAmount[0] = -1 * directions[0] * (moveByX / 2 + separationBuffer);
+  overlapAmount[1] = -1 * directions[1] * (moveByY / 2 + separationBuffer);
+};
+
+/**
+ * This method decides the separation direction of overlapping nodes
+ *
+ * if directions[0] = -1, then rectA goes left
+ * if directions[0] = 1,  then rectA goes right
+ * if directions[1] = -1, then rectA goes up
+ * if directions[1] = 1,  then rectA goes down
+ */
+IGeometry.decideDirectionsForOverlappingNodes = function (rectA, rectB, directions) {
+  if (rectA.getCenterX() < rectB.getCenterX()) {
+    directions[0] = -1;
+  } else {
+    directions[0] = 1;
+  }
+
+  if (rectA.getCenterY() < rectB.getCenterY()) {
+    directions[1] = -1;
+  } else {
+    directions[1] = 1;
+  }
+};
+
+/**
+ * This method calculates the intersection (clipping) points of the two
+ * input rectangles with line segment defined by the centers of these two
+ * rectangles. The clipping points are saved in the input double array and
+ * whether or not the two rectangles overlap is returned.
+ */
+IGeometry.getIntersection2 = function (rectA, rectB, result) {
+  //result[0-1] will contain clipPoint of rectA, result[2-3] will contain clipPoint of rectB
+  var p1x = rectA.getCenterX();
+  var p1y = rectA.getCenterY();
+  var p2x = rectB.getCenterX();
+  var p2y = rectB.getCenterY();
+
+  //if two rectangles intersect, then clipping points are centers
+  if (rectA.intersects(rectB)) {
+    result[0] = p1x;
+    result[1] = p1y;
+    result[2] = p2x;
+    result[3] = p2y;
+    return true;
+  }
+  //variables for rectA
+  var topLeftAx = rectA.getX();
+  var topLeftAy = rectA.getY();
+  var topRightAx = rectA.getRight();
+  var bottomLeftAx = rectA.getX();
+  var bottomLeftAy = rectA.getBottom();
+  var bottomRightAx = rectA.getRight();
+  var halfWidthA = rectA.getWidthHalf();
+  var halfHeightA = rectA.getHeightHalf();
+  //variables for rectB
+  var topLeftBx = rectB.getX();
+  var topLeftBy = rectB.getY();
+  var topRightBx = rectB.getRight();
+  var bottomLeftBx = rectB.getX();
+  var bottomLeftBy = rectB.getBottom();
+  var bottomRightBx = rectB.getRight();
+  var halfWidthB = rectB.getWidthHalf();
+  var halfHeightB = rectB.getHeightHalf();
+
+  //flag whether clipping points are found
+  var clipPointAFound = false;
+  var clipPointBFound = false;
+
+  // line is vertical
+  if (p1x === p2x) {
+    if (p1y > p2y) {
+      result[0] = p1x;
+      result[1] = topLeftAy;
+      result[2] = p2x;
+      result[3] = bottomLeftBy;
+      return false;
+    } else if (p1y < p2y) {
+      result[0] = p1x;
+      result[1] = bottomLeftAy;
+      result[2] = p2x;
+      result[3] = topLeftBy;
+      return false;
+    } else {
+      //not line, return null;
+    }
+  }
+  // line is horizontal
+  else if (p1y === p2y) {
+      if (p1x > p2x) {
+        result[0] = topLeftAx;
+        result[1] = p1y;
+        result[2] = topRightBx;
+        result[3] = p2y;
+        return false;
+      } else if (p1x < p2x) {
+        result[0] = topRightAx;
+        result[1] = p1y;
+        result[2] = topLeftBx;
+        result[3] = p2y;
+        return false;
+      } else {
+        //not valid line, return null;
+      }
+    } else {
+      //slopes of rectA's and rectB's diagonals
+      var slopeA = rectA.height / rectA.width;
+      var slopeB = rectB.height / rectB.width;
+
+      //slope of line between center of rectA and center of rectB
+      var slopePrime = (p2y - p1y) / (p2x - p1x);
+      var cardinalDirectionA = void 0;
+      var cardinalDirectionB = void 0;
+      var tempPointAx = void 0;
+      var tempPointAy = void 0;
+      var tempPointBx = void 0;
+      var tempPointBy = void 0;
+
+      //determine whether clipping point is the corner of nodeA
+      if (-slopeA === slopePrime) {
+        if (p1x > p2x) {
+          result[0] = bottomLeftAx;
+          result[1] = bottomLeftAy;
+          clipPointAFound = true;
+        } else {
+          result[0] = topRightAx;
+          result[1] = topLeftAy;
+          clipPointAFound = true;
+        }
+      } else if (slopeA === slopePrime) {
+        if (p1x > p2x) {
+          result[0] = topLeftAx;
+          result[1] = topLeftAy;
+          clipPointAFound = true;
+        } else {
+          result[0] = bottomRightAx;
+          result[1] = bottomLeftAy;
+          clipPointAFound = true;
+        }
+      }
+
+      //determine whether clipping point is the corner of nodeB
+      if (-slopeB === slopePrime) {
+        if (p2x > p1x) {
+          result[2] = bottomLeftBx;
+          result[3] = bottomLeftBy;
+          clipPointBFound = true;
+        } else {
+          result[2] = topRightBx;
+          result[3] = topLeftBy;
+          clipPointBFound = true;
+        }
+      } else if (slopeB === slopePrime) {
+        if (p2x > p1x) {
+          result[2] = topLeftBx;
+          result[3] = topLeftBy;
+          clipPointBFound = true;
+        } else {
+          result[2] = bottomRightBx;
+          result[3] = bottomLeftBy;
+          clipPointBFound = true;
+        }
+      }
+
+      //if both clipping points are corners
+      if (clipPointAFound && clipPointBFound) {
+        return false;
+      }
+
+      //determine Cardinal Direction of rectangles
+      if (p1x > p2x) {
+        if (p1y > p2y) {
+          cardinalDirectionA = this.getCardinalDirection(slopeA, slopePrime, 4);
+          cardinalDirectionB = this.getCardinalDirection(slopeB, slopePrime, 2);
+        } else {
+          cardinalDirectionA = this.getCardinalDirection(-slopeA, slopePrime, 3);
+          cardinalDirectionB = this.getCardinalDirection(-slopeB, slopePrime, 1);
+        }
+      } else {
+        if (p1y > p2y) {
+          cardinalDirectionA = this.getCardinalDirection(-slopeA, slopePrime, 1);
+          cardinalDirectionB = this.getCardinalDirection(-slopeB, slopePrime, 3);
+        } else {
+          cardinalDirectionA = this.getCardinalDirection(slopeA, slopePrime, 2);
+          cardinalDirectionB = this.getCardinalDirection(slopeB, slopePrime, 4);
+        }
+      }
+      //calculate clipping Point if it is not found before
+      if (!clipPointAFound) {
+        switch (cardinalDirectionA) {
+          case 1:
+            tempPointAy = topLeftAy;
+            tempPointAx = p1x + -halfHeightA / slopePrime;
+            result[0] = tempPointAx;
+            result[1] = tempPointAy;
+            break;
+          case 2:
+            tempPointAx = bottomRightAx;
+            tempPointAy = p1y + halfWidthA * slopePrime;
+            result[0] = tempPointAx;
+            result[1] = tempPointAy;
+            break;
+          case 3:
+            tempPointAy = bottomLeftAy;
+            tempPointAx = p1x + halfHeightA / slopePrime;
+            result[0] = tempPointAx;
+            result[1] = tempPointAy;
+            break;
+          case 4:
+            tempPointAx = bottomLeftAx;
+            tempPointAy = p1y + -halfWidthA * slopePrime;
+            result[0] = tempPointAx;
+            result[1] = tempPointAy;
+            break;
+        }
+      }
+      if (!clipPointBFound) {
+        switch (cardinalDirectionB) {
+          case 1:
+            tempPointBy = topLeftBy;
+            tempPointBx = p2x + -halfHeightB / slopePrime;
+            result[2] = tempPointBx;
+            result[3] = tempPointBy;
+            break;
+          case 2:
+            tempPointBx = bottomRightBx;
+            tempPointBy = p2y + halfWidthB * slopePrime;
+            result[2] = tempPointBx;
+            result[3] = tempPointBy;
+            break;
+          case 3:
+            tempPointBy = bottomLeftBy;
+            tempPointBx = p2x + halfHeightB / slopePrime;
+            result[2] = tempPointBx;
+            result[3] = tempPointBy;
+            break;
+          case 4:
+            tempPointBx = bottomLeftBx;
+            tempPointBy = p2y + -halfWidthB * slopePrime;
+            result[2] = tempPointBx;
+            result[3] = tempPointBy;
+            break;
+        }
+      }
+    }
+  return false;
+};
+
+/**
+ * This method returns in which cardinal direction does input point stays
+ * 1: North
+ * 2: East
+ * 3: South
+ * 4: West
+ */
+IGeometry.getCardinalDirection = function (slope, slopePrime, line) {
+  if (slope > slopePrime) {
+    return line;
+  } else {
+    return 1 + line % 4;
+  }
+};
+
+/**
+ * This method calculates the intersection of the two lines defined by
+ * point pairs (s1,s2) and (f1,f2).
+ */
+IGeometry.getIntersection = function (s1, s2, f1, f2) {
+  if (f2 == null) {
+    return this.getIntersection2(s1, s2, f1);
+  }
+
+  var x1 = s1.x;
+  var y1 = s1.y;
+  var x2 = s2.x;
+  var y2 = s2.y;
+  var x3 = f1.x;
+  var y3 = f1.y;
+  var x4 = f2.x;
+  var y4 = f2.y;
+  var x = void 0,
+      y = void 0; // intersection point
+  var a1 = void 0,
+      a2 = void 0,
+      b1 = void 0,
+      b2 = void 0,
+      c1 = void 0,
+      c2 = void 0; // coefficients of line eqns.
+  var denom = void 0;
+
+  a1 = y2 - y1;
+  b1 = x1 - x2;
+  c1 = x2 * y1 - x1 * y2; // { a1*x + b1*y + c1 = 0 is line 1 }
+
+  a2 = y4 - y3;
+  b2 = x3 - x4;
+  c2 = x4 * y3 - x3 * y4; // { a2*x + b2*y + c2 = 0 is line 2 }
+
+  denom = a1 * b2 - a2 * b1;
+
+  if (denom === 0) {
+    return null;
+  }
+
+  x = (b1 * c2 - b2 * c1) / denom;
+  y = (a2 * c1 - a1 * c2) / denom;
+
+  return new Point(x, y);
+};
+
+/**
+ * This method finds and returns the angle of the vector from the + x-axis
+ * in clockwise direction (compatible w/ Java coordinate system!).
+ */
+IGeometry.angleOfVector = function (Cx, Cy, Nx, Ny) {
+  var C_angle = void 0;
+
+  if (Cx !== Nx) {
+    C_angle = Math.atan((Ny - Cy) / (Nx - Cx));
+
+    if (Nx < Cx) {
+      C_angle += Math.PI;
+    } else if (Ny < Cy) {
+      C_angle += this.TWO_PI;
+    }
+  } else if (Ny < Cy) {
+    C_angle = this.ONE_AND_HALF_PI; // 270 degrees
+  } else {
+    C_angle = this.HALF_PI; // 90 degrees
+  }
+
+  return C_angle;
+};
+
+/**
+ * This method checks whether the given two line segments (one with point
+ * p1 and p2, the other with point p3 and p4) intersect at a point other
+ * than these points.
+ */
+IGeometry.doIntersect = function (p1, p2, p3, p4) {
+  var a = p1.x;
+  var b = p1.y;
+  var c = p2.x;
+  var d = p2.y;
+  var p = p3.x;
+  var q = p3.y;
+  var r = p4.x;
+  var s = p4.y;
+  var det = (c - a) * (s - q) - (r - p) * (d - b);
+
+  if (det === 0) {
+    return false;
+  } else {
+    var lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+    var gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+    return 0 < lambda && lambda < 1 && 0 < gamma && gamma < 1;
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Section: Class Constants
+// -----------------------------------------------------------------------------
+/**
+ * Some useful pre-calculated constants
+ */
+IGeometry.HALF_PI = 0.5 * Math.PI;
+IGeometry.ONE_AND_HALF_PI = 1.5 * Math.PI;
+IGeometry.TWO_PI = 2.0 * Math.PI;
+IGeometry.THREE_PI = 3.0 * Math.PI;
+
+module.exports = IGeometry;
+
+/***/ }),
+/* 9 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function IMath() {}
+
+/**
+ * This method returns the sign of the input value.
+ */
+IMath.sign = function (value) {
+  if (value > 0) {
+    return 1;
+  } else if (value < 0) {
+    return -1;
+  } else {
+    return 0;
+  }
+};
+
+IMath.floor = function (value) {
+  return value < 0 ? Math.ceil(value) : Math.floor(value);
+};
+
+IMath.ceil = function (value) {
+  return value < 0 ? Math.floor(value) : Math.ceil(value);
+};
+
+module.exports = IMath;
+
+/***/ }),
+/* 10 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function Integer() {}
+
+Integer.MAX_VALUE = 2147483647;
+Integer.MIN_VALUE = -2147483648;
+
+module.exports = Integer;
+
+/***/ }),
+/* 11 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var nodeFrom = function nodeFrom(value) {
+  return { value: value, next: null, prev: null };
+};
+
+var add = function add(prev, node, next, list) {
+  if (prev !== null) {
+    prev.next = node;
+  } else {
+    list.head = node;
+  }
+
+  if (next !== null) {
+    next.prev = node;
+  } else {
+    list.tail = node;
+  }
+
+  node.prev = prev;
+  node.next = next;
+
+  list.length++;
+
+  return node;
+};
+
+var _remove = function _remove(node, list) {
+  var prev = node.prev,
+      next = node.next;
+
+
+  if (prev !== null) {
+    prev.next = next;
+  } else {
+    list.head = next;
+  }
+
+  if (next !== null) {
+    next.prev = prev;
+  } else {
+    list.tail = prev;
+  }
+
+  node.prev = node.next = null;
+
+  list.length--;
+
+  return node;
+};
+
+var LinkedList = function () {
+  function LinkedList(vals) {
+    var _this = this;
+
+    _classCallCheck(this, LinkedList);
+
+    this.length = 0;
+    this.head = null;
+    this.tail = null;
+
+    if (vals != null) {
+      vals.forEach(function (v) {
+        return _this.push(v);
+      });
+    }
+  }
+
+  _createClass(LinkedList, [{
+    key: "size",
+    value: function size() {
+      return this.length;
+    }
+  }, {
+    key: "insertBefore",
+    value: function insertBefore(val, otherNode) {
+      return add(otherNode.prev, nodeFrom(val), otherNode, this);
+    }
+  }, {
+    key: "insertAfter",
+    value: function insertAfter(val, otherNode) {
+      return add(otherNode, nodeFrom(val), otherNode.next, this);
+    }
+  }, {
+    key: "insertNodeBefore",
+    value: function insertNodeBefore(newNode, otherNode) {
+      return add(otherNode.prev, newNode, otherNode, this);
+    }
+  }, {
+    key: "insertNodeAfter",
+    value: function insertNodeAfter(newNode, otherNode) {
+      return add(otherNode, newNode, otherNode.next, this);
+    }
+  }, {
+    key: "push",
+    value: function push(val) {
+      return add(this.tail, nodeFrom(val), null, this);
+    }
+  }, {
+    key: "unshift",
+    value: function unshift(val) {
+      return add(null, nodeFrom(val), this.head, this);
+    }
+  }, {
+    key: "remove",
+    value: function remove(node) {
+      return _remove(node, this);
+    }
+  }, {
+    key: "pop",
+    value: function pop() {
+      return _remove(this.tail, this).value;
+    }
+  }, {
+    key: "popNode",
+    value: function popNode() {
+      return _remove(this.tail, this);
+    }
+  }, {
+    key: "shift",
+    value: function shift() {
+      return _remove(this.head, this).value;
+    }
+  }, {
+    key: "shiftNode",
+    value: function shiftNode() {
+      return _remove(this.head, this);
+    }
+  }, {
+    key: "get_object_at",
+    value: function get_object_at(index) {
+      if (index <= this.length()) {
+        var i = 1;
+        var current = this.head;
+        while (i < index) {
+          current = current.next;
+          i++;
+        }
+        return current.value;
+      }
+    }
+  }, {
+    key: "set_object_at",
+    value: function set_object_at(index, value) {
+      if (index <= this.length()) {
+        var i = 1;
+        var current = this.head;
+        while (i < index) {
+          current = current.next;
+          i++;
+        }
+        current.value = value;
+      }
+    }
+  }]);
+
+  return LinkedList;
+}();
+
+module.exports = LinkedList;
+
+/***/ }),
+/* 12 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/*
+ *This class is the javascript implementation of the Point.java class in jdk
+ */
+function Point(x, y, p) {
+  this.x = null;
+  this.y = null;
+  if (x == null && y == null && p == null) {
+    this.x = 0;
+    this.y = 0;
+  } else if (typeof x == 'number' && typeof y == 'number' && p == null) {
+    this.x = x;
+    this.y = y;
+  } else if (x.constructor.name == 'Point' && y == null && p == null) {
+    p = x;
+    this.x = p.x;
+    this.y = p.y;
+  }
+}
+
+Point.prototype.getX = function () {
+  return this.x;
+};
+
+Point.prototype.getY = function () {
+  return this.y;
+};
+
+Point.prototype.getLocation = function () {
+  return new Point(this.x, this.y);
+};
+
+Point.prototype.setLocation = function (x, y, p) {
+  if (x.constructor.name == 'Point' && y == null && p == null) {
+    p = x;
+    this.setLocation(p.x, p.y);
+  } else if (typeof x == 'number' && typeof y == 'number' && p == null) {
+    //if both parameters are integer just move (x,y) location
+    if (parseInt(x) == x && parseInt(y) == y) {
+      this.move(x, y);
+    } else {
+      this.x = Math.floor(x + 0.5);
+      this.y = Math.floor(y + 0.5);
+    }
+  }
+};
+
+Point.prototype.move = function (x, y) {
+  this.x = x;
+  this.y = y;
+};
+
+Point.prototype.translate = function (dx, dy) {
+  this.x += dx;
+  this.y += dy;
+};
+
+Point.prototype.equals = function (obj) {
+  if (obj.constructor.name == "Point") {
+    var pt = obj;
+    return this.x == pt.x && this.y == pt.y;
+  }
+  return this == obj;
+};
+
+Point.prototype.toString = function () {
+  return new Point().constructor.name + "[x=" + this.x + ",y=" + this.y + "]";
+};
+
+module.exports = Point;
+
+/***/ }),
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function RectangleD(x, y, width, height) {
+  this.x = 0;
+  this.y = 0;
+  this.width = 0;
+  this.height = 0;
+
+  if (x != null && y != null && width != null && height != null) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+}
+
+RectangleD.prototype.getX = function () {
+  return this.x;
+};
+
+RectangleD.prototype.setX = function (x) {
+  this.x = x;
+};
+
+RectangleD.prototype.getY = function () {
+  return this.y;
+};
+
+RectangleD.prototype.setY = function (y) {
+  this.y = y;
+};
+
+RectangleD.prototype.getWidth = function () {
+  return this.width;
+};
+
+RectangleD.prototype.setWidth = function (width) {
+  this.width = width;
+};
+
+RectangleD.prototype.getHeight = function () {
+  return this.height;
+};
+
+RectangleD.prototype.setHeight = function (height) {
+  this.height = height;
+};
+
+RectangleD.prototype.getRight = function () {
+  return this.x + this.width;
+};
+
+RectangleD.prototype.getBottom = function () {
+  return this.y + this.height;
+};
+
+RectangleD.prototype.intersects = function (a) {
+  if (this.getRight() < a.x) {
+    return false;
+  }
+
+  if (this.getBottom() < a.y) {
+    return false;
+  }
+
+  if (a.getRight() < this.x) {
+    return false;
+  }
+
+  if (a.getBottom() < this.y) {
+    return false;
+  }
+
+  return true;
+};
+
+RectangleD.prototype.getCenterX = function () {
+  return this.x + this.width / 2;
+};
+
+RectangleD.prototype.getMinX = function () {
+  return this.getX();
+};
+
+RectangleD.prototype.getMaxX = function () {
+  return this.getX() + this.width;
+};
+
+RectangleD.prototype.getCenterY = function () {
+  return this.y + this.height / 2;
+};
+
+RectangleD.prototype.getMinY = function () {
+  return this.getY();
+};
+
+RectangleD.prototype.getMaxY = function () {
+  return this.getY() + this.height;
+};
+
+RectangleD.prototype.getWidthHalf = function () {
+  return this.width / 2;
+};
+
+RectangleD.prototype.getHeightHalf = function () {
+  return this.height / 2;
+};
+
+module.exports = RectangleD;
+
+/***/ }),
+/* 14 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
+function UniqueIDGeneretor() {}
+
+UniqueIDGeneretor.lastID = 0;
+
+UniqueIDGeneretor.createID = function (obj) {
+  if (UniqueIDGeneretor.isPrimitive(obj)) {
+    return obj;
+  }
+  if (obj.uniqueID != null) {
+    return obj.uniqueID;
+  }
+  obj.uniqueID = UniqueIDGeneretor.getString();
+  UniqueIDGeneretor.lastID++;
+  return obj.uniqueID;
+};
+
+UniqueIDGeneretor.getString = function (id) {
+  if (id == null) id = UniqueIDGeneretor.lastID;
+  return "Object#" + id + "";
+};
+
+UniqueIDGeneretor.isPrimitive = function (arg) {
+  var type = typeof arg === "undefined" ? "undefined" : _typeof(arg);
+  return arg == null || type != "object" && type != "function";
+};
+
+module.exports = UniqueIDGeneretor;
+
+/***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+var LayoutConstants = __webpack_require__(0);
+var LGraphManager = __webpack_require__(6);
+var LNode = __webpack_require__(3);
+var LEdge = __webpack_require__(1);
+var LGraph = __webpack_require__(5);
+var PointD = __webpack_require__(4);
+var Transform = __webpack_require__(17);
+var Emitter = __webpack_require__(27);
+
+function Layout(isRemoteUse) {
+  Emitter.call(this);
+
+  //Layout Quality: 0:draft, 1:default, 2:proof
+  this.layoutQuality = LayoutConstants.QUALITY;
+  //Whether layout should create bendpoints as needed or not
+  this.createBendsAsNeeded = LayoutConstants.DEFAULT_CREATE_BENDS_AS_NEEDED;
+  //Whether layout should be incremental or not
+  this.incremental = LayoutConstants.DEFAULT_INCREMENTAL;
+  //Whether we animate from before to after layout node positions
+  this.animationOnLayout = LayoutConstants.DEFAULT_ANIMATION_ON_LAYOUT;
+  //Whether we animate the layout process or not
+  this.animationDuringLayout = LayoutConstants.DEFAULT_ANIMATION_DURING_LAYOUT;
+  //Number iterations that should be done between two successive animations
+  this.animationPeriod = LayoutConstants.DEFAULT_ANIMATION_PERIOD;
+  /**
+   * Whether or not leaf nodes (non-compound nodes) are of uniform sizes. When
+   * they are, both spring and repulsion forces between two leaf nodes can be
+   * calculated without the expensive clipping point calculations, resulting
+   * in major speed-up.
+   */
+  this.uniformLeafNodeSizes = LayoutConstants.DEFAULT_UNIFORM_LEAF_NODE_SIZES;
+  /**
+   * This is used for creation of bendpoints by using dummy nodes and edges.
+   * Maps an LEdge to its dummy bendpoint path.
+   */
+  this.edgeToDummyNodes = new Map();
+  this.graphManager = new LGraphManager(this);
+  this.isLayoutFinished = false;
+  this.isSubLayout = false;
+  this.isRemoteUse = false;
+
+  if (isRemoteUse != null) {
+    this.isRemoteUse = isRemoteUse;
+  }
+}
+
+Layout.RANDOM_SEED = 1;
+
+Layout.prototype = Object.create(Emitter.prototype);
+
+Layout.prototype.getGraphManager = function () {
+  return this.graphManager;
+};
+
+Layout.prototype.getAllNodes = function () {
+  return this.graphManager.getAllNodes();
+};
+
+Layout.prototype.getAllEdges = function () {
+  return this.graphManager.getAllEdges();
+};
+
+Layout.prototype.getAllNodesToApplyGravitation = function () {
+  return this.graphManager.getAllNodesToApplyGravitation();
+};
+
+Layout.prototype.newGraphManager = function () {
+  var gm = new LGraphManager(this);
+  this.graphManager = gm;
+  return gm;
+};
+
+Layout.prototype.newGraph = function (vGraph) {
+  return new LGraph(null, this.graphManager, vGraph);
+};
+
+Layout.prototype.newNode = function (vNode) {
+  return new LNode(this.graphManager, vNode);
+};
+
+Layout.prototype.newEdge = function (vEdge) {
+  return new LEdge(null, null, vEdge);
+};
+
+Layout.prototype.checkLayoutSuccess = function () {
+  return this.graphManager.getRoot() == null || this.graphManager.getRoot().getNodes().length == 0 || this.graphManager.includesInvalidEdge();
+};
+
+Layout.prototype.runLayout = function () {
+  this.isLayoutFinished = false;
+
+  if (this.tilingPreLayout) {
+    this.tilingPreLayout();
+  }
+
+  this.initParameters();
+  var isLayoutSuccessfull;
+
+  if (this.checkLayoutSuccess()) {
+    isLayoutSuccessfull = false;
+  } else {
+    isLayoutSuccessfull = this.layout();
+  }
+
+  if (LayoutConstants.ANIMATE === 'during') {
+    // If this is a 'during' layout animation. Layout is not finished yet. 
+    // We need to perform these in index.js when layout is really finished.
+    return false;
+  }
+
+  if (isLayoutSuccessfull) {
+    if (!this.isSubLayout) {
+      this.doPostLayout();
+    }
+  }
+
+  if (this.tilingPostLayout) {
+    this.tilingPostLayout();
+  }
+
+  this.isLayoutFinished = true;
+
+  return isLayoutSuccessfull;
+};
+
+/**
+ * This method performs the operations required after layout.
+ */
+Layout.prototype.doPostLayout = function () {
+  //assert !isSubLayout : "Should not be called on sub-layout!";
+  // Propagate geometric changes to v-level objects
+  if (!this.incremental) {
+    this.transform();
+  }
+  this.update();
+};
+
+/**
+ * This method updates the geometry of the target graph according to
+ * calculated layout.
+ */
+Layout.prototype.update2 = function () {
+  // update bend points
+  if (this.createBendsAsNeeded) {
+    this.createBendpointsFromDummyNodes();
+
+    // reset all edges, since the topology has changed
+    this.graphManager.resetAllEdges();
+  }
+
+  // perform edge, node and root updates if layout is not called
+  // remotely
+  if (!this.isRemoteUse) {
+    // update all edges
+    var edge;
+    var allEdges = this.graphManager.getAllEdges();
+    for (var i = 0; i < allEdges.length; i++) {
+      edge = allEdges[i];
+      //      this.update(edge);
+    }
+
+    // recursively update nodes
+    var node;
+    var nodes = this.graphManager.getRoot().getNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      node = nodes[i];
+      //      this.update(node);
+    }
+
+    // update root graph
+    this.update(this.graphManager.getRoot());
+  }
+};
+
+Layout.prototype.update = function (obj) {
+  if (obj == null) {
+    this.update2();
+  } else if (obj instanceof LNode) {
+    var node = obj;
+    if (node.getChild() != null) {
+      // since node is compound, recursively update child nodes
+      var nodes = node.getChild().getNodes();
+      for (var i = 0; i < nodes.length; i++) {
+        update(nodes[i]);
+      }
+    }
+
+    // if the l-level node is associated with a v-level graph object,
+    // then it is assumed that the v-level node implements the
+    // interface Updatable.
+    if (node.vGraphObject != null) {
+      // cast to Updatable without any type check
+      var vNode = node.vGraphObject;
+
+      // call the update method of the interface
+      vNode.update(node);
+    }
+  } else if (obj instanceof LEdge) {
+    var edge = obj;
+    // if the l-level edge is associated with a v-level graph object,
+    // then it is assumed that the v-level edge implements the
+    // interface Updatable.
+
+    if (edge.vGraphObject != null) {
+      // cast to Updatable without any type check
+      var vEdge = edge.vGraphObject;
+
+      // call the update method of the interface
+      vEdge.update(edge);
+    }
+  } else if (obj instanceof LGraph) {
+    var graph = obj;
+    // if the l-level graph is associated with a v-level graph object,
+    // then it is assumed that the v-level object implements the
+    // interface Updatable.
+
+    if (graph.vGraphObject != null) {
+      // cast to Updatable without any type check
+      var vGraph = graph.vGraphObject;
+
+      // call the update method of the interface
+      vGraph.update(graph);
+    }
+  }
+};
+
+/**
+ * This method is used to set all layout parameters to default values
+ * determined at compile time.
+ */
+Layout.prototype.initParameters = function () {
+  if (!this.isSubLayout) {
+    this.layoutQuality = LayoutConstants.QUALITY;
+    this.animationDuringLayout = LayoutConstants.DEFAULT_ANIMATION_DURING_LAYOUT;
+    this.animationPeriod = LayoutConstants.DEFAULT_ANIMATION_PERIOD;
+    this.animationOnLayout = LayoutConstants.DEFAULT_ANIMATION_ON_LAYOUT;
+    this.incremental = LayoutConstants.DEFAULT_INCREMENTAL;
+    this.createBendsAsNeeded = LayoutConstants.DEFAULT_CREATE_BENDS_AS_NEEDED;
+    this.uniformLeafNodeSizes = LayoutConstants.DEFAULT_UNIFORM_LEAF_NODE_SIZES;
+  }
+
+  if (this.animationDuringLayout) {
+    this.animationOnLayout = false;
+  }
+};
+
+Layout.prototype.transform = function (newLeftTop) {
+  if (newLeftTop == undefined) {
+    this.transform(new PointD(0, 0));
+  } else {
+    // create a transformation object (from Eclipse to layout). When an
+    // inverse transform is applied, we get upper-left coordinate of the
+    // drawing or the root graph at given input coordinate (some margins
+    // already included in calculation of left-top).
+
+    var trans = new Transform();
+    var leftTop = this.graphManager.getRoot().updateLeftTop();
+
+    if (leftTop != null) {
+      trans.setWorldOrgX(newLeftTop.x);
+      trans.setWorldOrgY(newLeftTop.y);
+
+      trans.setDeviceOrgX(leftTop.x);
+      trans.setDeviceOrgY(leftTop.y);
+
+      var nodes = this.getAllNodes();
+      var node;
+
+      for (var i = 0; i < nodes.length; i++) {
+        node = nodes[i];
+        node.transform(trans);
+      }
+    }
+  }
+};
+
+Layout.prototype.positionNodesRandomly = function (graph) {
+
+  if (graph == undefined) {
+    //assert !this.incremental;
+    this.positionNodesRandomly(this.getGraphManager().getRoot());
+    this.getGraphManager().getRoot().updateBounds(true);
+  } else {
+    var lNode;
+    var childGraph;
+
+    var nodes = graph.getNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      lNode = nodes[i];
+      childGraph = lNode.getChild();
+
+      if (childGraph == null) {
+        lNode.scatter();
+      } else if (childGraph.getNodes().length == 0) {
+        lNode.scatter();
+      } else {
+        this.positionNodesRandomly(childGraph);
+        lNode.updateBounds();
+      }
+    }
+  }
+};
+
+/**
+ * This method returns a list of trees where each tree is represented as a
+ * list of l-nodes. The method returns a list of size 0 when:
+ * - The graph is not flat or
+ * - One of the component(s) of the graph is not a tree.
+ */
+Layout.prototype.getFlatForest = function () {
+  var flatForest = [];
+  var isForest = true;
+
+  // Quick reference for all nodes in the graph manager associated with
+  // this layout. The list should not be changed.
+  var allNodes = this.graphManager.getRoot().getNodes();
+
+  // First be sure that the graph is flat
+  var isFlat = true;
+
+  for (var i = 0; i < allNodes.length; i++) {
+    if (allNodes[i].getChild() != null) {
+      isFlat = false;
+    }
+  }
+
+  // Return empty forest if the graph is not flat.
+  if (!isFlat) {
+    return flatForest;
+  }
+
+  // Run BFS for each component of the graph.
+
+  var visited = new Set();
+  var toBeVisited = [];
+  var parents = new Map();
+  var unProcessedNodes = [];
+
+  unProcessedNodes = unProcessedNodes.concat(allNodes);
+
+  // Each iteration of this loop finds a component of the graph and
+  // decides whether it is a tree or not. If it is a tree, adds it to the
+  // forest and continued with the next component.
+
+  while (unProcessedNodes.length > 0 && isForest) {
+    toBeVisited.push(unProcessedNodes[0]);
+
+    // Start the BFS. Each iteration of this loop visits a node in a
+    // BFS manner.
+    while (toBeVisited.length > 0 && isForest) {
+      //pool operation
+      var currentNode = toBeVisited[0];
+      toBeVisited.splice(0, 1);
+      visited.add(currentNode);
+
+      // Traverse all neighbors of this node
+      var neighborEdges = currentNode.getEdges();
+
+      for (var i = 0; i < neighborEdges.length; i++) {
+        var currentNeighbor = neighborEdges[i].getOtherEnd(currentNode);
+
+        // If BFS is not growing from this neighbor.
+        if (parents.get(currentNode) != currentNeighbor) {
+          // We haven't previously visited this neighbor.
+          if (!visited.has(currentNeighbor)) {
+            toBeVisited.push(currentNeighbor);
+            parents.set(currentNeighbor, currentNode);
+          }
+          // Since we have previously visited this neighbor and
+          // this neighbor is not parent of currentNode, given
+          // graph contains a component that is not tree, hence
+          // it is not a forest.
+          else {
+              isForest = false;
+              break;
+            }
+        }
+      }
+    }
+
+    // The graph contains a component that is not a tree. Empty
+    // previously found trees. The method will end.
+    if (!isForest) {
+      flatForest = [];
+    }
+    // Save currently visited nodes as a tree in our forest. Reset
+    // visited and parents lists. Continue with the next component of
+    // the graph, if any.
+    else {
+        var temp = [].concat(_toConsumableArray(visited));
+        flatForest.push(temp);
+        //flatForest = flatForest.concat(temp);
+        //unProcessedNodes.removeAll(visited);
+        for (var i = 0; i < temp.length; i++) {
+          var value = temp[i];
+          var index = unProcessedNodes.indexOf(value);
+          if (index > -1) {
+            unProcessedNodes.splice(index, 1);
+          }
+        }
+        visited = new Set();
+        parents = new Map();
+      }
+  }
+
+  return flatForest;
+};
+
+/**
+ * This method creates dummy nodes (an l-level node with minimal dimensions)
+ * for the given edge (one per bendpoint). The existing l-level structure
+ * is updated accordingly.
+ */
+Layout.prototype.createDummyNodesForBendpoints = function (edge) {
+  var dummyNodes = [];
+  var prev = edge.source;
+
+  var graph = this.graphManager.calcLowestCommonAncestor(edge.source, edge.target);
+
+  for (var i = 0; i < edge.bendpoints.length; i++) {
+    // create new dummy node
+    var dummyNode = this.newNode(null);
+    dummyNode.setRect(new Point(0, 0), new Dimension(1, 1));
+
+    graph.add(dummyNode);
+
+    // create new dummy edge between prev and dummy node
+    var dummyEdge = this.newEdge(null);
+    this.graphManager.add(dummyEdge, prev, dummyNode);
+
+    dummyNodes.add(dummyNode);
+    prev = dummyNode;
+  }
+
+  var dummyEdge = this.newEdge(null);
+  this.graphManager.add(dummyEdge, prev, edge.target);
+
+  this.edgeToDummyNodes.set(edge, dummyNodes);
+
+  // remove real edge from graph manager if it is inter-graph
+  if (edge.isInterGraph()) {
+    this.graphManager.remove(edge);
+  }
+  // else, remove the edge from the current graph
+  else {
+      graph.remove(edge);
+    }
+
+  return dummyNodes;
+};
+
+/**
+ * This method creates bendpoints for edges from the dummy nodes
+ * at l-level.
+ */
+Layout.prototype.createBendpointsFromDummyNodes = function () {
+  var edges = [];
+  edges = edges.concat(this.graphManager.getAllEdges());
+  edges = [].concat(_toConsumableArray(this.edgeToDummyNodes.keys())).concat(edges);
+
+  for (var k = 0; k < edges.length; k++) {
+    var lEdge = edges[k];
+
+    if (lEdge.bendpoints.length > 0) {
+      var path = this.edgeToDummyNodes.get(lEdge);
+
+      for (var i = 0; i < path.length; i++) {
+        var dummyNode = path[i];
+        var p = new PointD(dummyNode.getCenterX(), dummyNode.getCenterY());
+
+        // update bendpoint's location according to dummy node
+        var ebp = lEdge.bendpoints.get(i);
+        ebp.x = p.x;
+        ebp.y = p.y;
+
+        // remove the dummy node, dummy edges incident with this
+        // dummy node is also removed (within the remove method)
+        dummyNode.getOwner().remove(dummyNode);
+      }
+
+      // add the real edge to graph
+      this.graphManager.add(lEdge, lEdge.source, lEdge.target);
+    }
+  }
+};
+
+Layout.transform = function (sliderValue, defaultValue, minDiv, maxMul) {
+  if (minDiv != undefined && maxMul != undefined) {
+    var value = defaultValue;
+
+    if (sliderValue <= 50) {
+      var minValue = defaultValue / minDiv;
+      value -= (defaultValue - minValue) / 50 * (50 - sliderValue);
+    } else {
+      var maxValue = defaultValue * maxMul;
+      value += (maxValue - defaultValue) / 50 * (sliderValue - 50);
+    }
+
+    return value;
+  } else {
+    var a, b;
+
+    if (sliderValue <= 50) {
+      a = 9.0 * defaultValue / 500.0;
+      b = defaultValue / 10.0;
+    } else {
+      a = 9.0 * defaultValue / 50.0;
+      b = -8 * defaultValue;
+    }
+
+    return a * sliderValue + b;
+  }
+};
+
+/**
+ * This method finds and returns the center of the given nodes, assuming
+ * that the given nodes form a tree in themselves.
+ */
+Layout.findCenterOfTree = function (nodes) {
+  var list = [];
+  list = list.concat(nodes);
+
+  var removedNodes = [];
+  var remainingDegrees = new Map();
+  var foundCenter = false;
+  var centerNode = null;
+
+  if (list.length == 1 || list.length == 2) {
+    foundCenter = true;
+    centerNode = list[0];
+  }
+
+  for (var i = 0; i < list.length; i++) {
+    var node = list[i];
+    var degree = node.getNeighborsList().size;
+    remainingDegrees.set(node, node.getNeighborsList().size);
+
+    if (degree == 1) {
+      removedNodes.push(node);
+    }
+  }
+
+  var tempList = [];
+  tempList = tempList.concat(removedNodes);
+
+  while (!foundCenter) {
+    var tempList2 = [];
+    tempList2 = tempList2.concat(tempList);
+    tempList = [];
+
+    for (var i = 0; i < list.length; i++) {
+      var node = list[i];
+
+      var index = list.indexOf(node);
+      if (index >= 0) {
+        list.splice(index, 1);
+      }
+
+      var neighbours = node.getNeighborsList();
+
+      neighbours.forEach(function (neighbour) {
+        if (removedNodes.indexOf(neighbour) < 0) {
+          var otherDegree = remainingDegrees.get(neighbour);
+          var newDegree = otherDegree - 1;
+
+          if (newDegree == 1) {
+            tempList.push(neighbour);
+          }
+
+          remainingDegrees.set(neighbour, newDegree);
+        }
+      });
+    }
+
+    removedNodes = removedNodes.concat(tempList);
+
+    if (list.length == 1 || list.length == 2) {
+      foundCenter = true;
+      centerNode = list[0];
+    }
+  }
+
+  return centerNode;
+};
+
+/**
+ * During the coarsening process, this layout may be referenced by two graph managers
+ * this setter function grants access to change the currently being used graph manager
+ */
+Layout.prototype.setGraphManager = function (gm) {
+  this.graphManager = gm;
+};
+
+module.exports = Layout;
+
+/***/ }),
+/* 16 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function RandomSeed() {}
+// adapted from: https://stackoverflow.com/a/19303725
+RandomSeed.seed = 1;
+RandomSeed.x = 0;
+
+RandomSeed.nextDouble = function () {
+  RandomSeed.x = Math.sin(RandomSeed.seed++) * 10000;
+  return RandomSeed.x - Math.floor(RandomSeed.x);
+};
+
+module.exports = RandomSeed;
+
+/***/ }),
+/* 17 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var PointD = __webpack_require__(4);
+
+function Transform(x, y) {
+  this.lworldOrgX = 0.0;
+  this.lworldOrgY = 0.0;
+  this.ldeviceOrgX = 0.0;
+  this.ldeviceOrgY = 0.0;
+  this.lworldExtX = 1.0;
+  this.lworldExtY = 1.0;
+  this.ldeviceExtX = 1.0;
+  this.ldeviceExtY = 1.0;
+}
+
+Transform.prototype.getWorldOrgX = function () {
+  return this.lworldOrgX;
+};
+
+Transform.prototype.setWorldOrgX = function (wox) {
+  this.lworldOrgX = wox;
+};
+
+Transform.prototype.getWorldOrgY = function () {
+  return this.lworldOrgY;
+};
+
+Transform.prototype.setWorldOrgY = function (woy) {
+  this.lworldOrgY = woy;
+};
+
+Transform.prototype.getWorldExtX = function () {
+  return this.lworldExtX;
+};
+
+Transform.prototype.setWorldExtX = function (wex) {
+  this.lworldExtX = wex;
+};
+
+Transform.prototype.getWorldExtY = function () {
+  return this.lworldExtY;
+};
+
+Transform.prototype.setWorldExtY = function (wey) {
+  this.lworldExtY = wey;
+};
+
+/* Device related */
+
+Transform.prototype.getDeviceOrgX = function () {
+  return this.ldeviceOrgX;
+};
+
+Transform.prototype.setDeviceOrgX = function (dox) {
+  this.ldeviceOrgX = dox;
+};
+
+Transform.prototype.getDeviceOrgY = function () {
+  return this.ldeviceOrgY;
+};
+
+Transform.prototype.setDeviceOrgY = function (doy) {
+  this.ldeviceOrgY = doy;
+};
+
+Transform.prototype.getDeviceExtX = function () {
+  return this.ldeviceExtX;
+};
+
+Transform.prototype.setDeviceExtX = function (dex) {
+  this.ldeviceExtX = dex;
+};
+
+Transform.prototype.getDeviceExtY = function () {
+  return this.ldeviceExtY;
+};
+
+Transform.prototype.setDeviceExtY = function (dey) {
+  this.ldeviceExtY = dey;
+};
+
+Transform.prototype.transformX = function (x) {
+  var xDevice = 0.0;
+  var worldExtX = this.lworldExtX;
+  if (worldExtX != 0.0) {
+    xDevice = this.ldeviceOrgX + (x - this.lworldOrgX) * this.ldeviceExtX / worldExtX;
+  }
+
+  return xDevice;
+};
+
+Transform.prototype.transformY = function (y) {
+  var yDevice = 0.0;
+  var worldExtY = this.lworldExtY;
+  if (worldExtY != 0.0) {
+    yDevice = this.ldeviceOrgY + (y - this.lworldOrgY) * this.ldeviceExtY / worldExtY;
+  }
+
+  return yDevice;
+};
+
+Transform.prototype.inverseTransformX = function (x) {
+  var xWorld = 0.0;
+  var deviceExtX = this.ldeviceExtX;
+  if (deviceExtX != 0.0) {
+    xWorld = this.lworldOrgX + (x - this.ldeviceOrgX) * this.lworldExtX / deviceExtX;
+  }
+
+  return xWorld;
+};
+
+Transform.prototype.inverseTransformY = function (y) {
+  var yWorld = 0.0;
+  var deviceExtY = this.ldeviceExtY;
+  if (deviceExtY != 0.0) {
+    yWorld = this.lworldOrgY + (y - this.ldeviceOrgY) * this.lworldExtY / deviceExtY;
+  }
+  return yWorld;
+};
+
+Transform.prototype.inverseTransformPoint = function (inPoint) {
+  var outPoint = new PointD(this.inverseTransformX(inPoint.x), this.inverseTransformY(inPoint.y));
+  return outPoint;
+};
+
+module.exports = Transform;
+
+/***/ }),
+/* 18 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+var Layout = __webpack_require__(15);
+var FDLayoutConstants = __webpack_require__(7);
+var LayoutConstants = __webpack_require__(0);
+var IGeometry = __webpack_require__(8);
+var IMath = __webpack_require__(9);
+
+function FDLayout() {
+  Layout.call(this);
+
+  this.useSmartIdealEdgeLengthCalculation = FDLayoutConstants.DEFAULT_USE_SMART_IDEAL_EDGE_LENGTH_CALCULATION;
+  this.idealEdgeLength = FDLayoutConstants.DEFAULT_EDGE_LENGTH;
+  this.springConstant = FDLayoutConstants.DEFAULT_SPRING_STRENGTH;
+  this.repulsionConstant = FDLayoutConstants.DEFAULT_REPULSION_STRENGTH;
+  this.gravityConstant = FDLayoutConstants.DEFAULT_GRAVITY_STRENGTH;
+  this.compoundGravityConstant = FDLayoutConstants.DEFAULT_COMPOUND_GRAVITY_STRENGTH;
+  this.gravityRangeFactor = FDLayoutConstants.DEFAULT_GRAVITY_RANGE_FACTOR;
+  this.compoundGravityRangeFactor = FDLayoutConstants.DEFAULT_COMPOUND_GRAVITY_RANGE_FACTOR;
+  this.displacementThresholdPerNode = 3.0 * FDLayoutConstants.DEFAULT_EDGE_LENGTH / 100;
+  this.coolingFactor = FDLayoutConstants.DEFAULT_COOLING_FACTOR_INCREMENTAL;
+  this.initialCoolingFactor = FDLayoutConstants.DEFAULT_COOLING_FACTOR_INCREMENTAL;
+  this.totalDisplacement = 0.0;
+  this.oldTotalDisplacement = 0.0;
+  this.maxIterations = FDLayoutConstants.MAX_ITERATIONS;
+}
+
+FDLayout.prototype = Object.create(Layout.prototype);
+
+for (var prop in Layout) {
+  FDLayout[prop] = Layout[prop];
+}
+
+FDLayout.prototype.initParameters = function () {
+  Layout.prototype.initParameters.call(this, arguments);
+
+  this.totalIterations = 0;
+  this.notAnimatedIterations = 0;
+
+  this.useFRGridVariant = FDLayoutConstants.DEFAULT_USE_SMART_REPULSION_RANGE_CALCULATION;
+
+  this.grid = [];
+};
+
+FDLayout.prototype.calcIdealEdgeLengths = function () {
+  var edge;
+  var lcaDepth;
+  var source;
+  var target;
+  var sizeOfSourceInLca;
+  var sizeOfTargetInLca;
+
+  var allEdges = this.getGraphManager().getAllEdges();
+  for (var i = 0; i < allEdges.length; i++) {
+    edge = allEdges[i];
+
+    edge.idealLength = this.idealEdgeLength;
+
+    if (edge.isInterGraph) {
+      source = edge.getSource();
+      target = edge.getTarget();
+
+      sizeOfSourceInLca = edge.getSourceInLca().getEstimatedSize();
+      sizeOfTargetInLca = edge.getTargetInLca().getEstimatedSize();
+
+      if (this.useSmartIdealEdgeLengthCalculation) {
+        edge.idealLength += sizeOfSourceInLca + sizeOfTargetInLca - 2 * LayoutConstants.SIMPLE_NODE_SIZE;
+      }
+
+      lcaDepth = edge.getLca().getInclusionTreeDepth();
+
+      edge.idealLength += FDLayoutConstants.DEFAULT_EDGE_LENGTH * FDLayoutConstants.PER_LEVEL_IDEAL_EDGE_LENGTH_FACTOR * (source.getInclusionTreeDepth() + target.getInclusionTreeDepth() - 2 * lcaDepth);
+    }
+  }
+};
+
+FDLayout.prototype.initSpringEmbedder = function () {
+
+  var s = this.getAllNodes().length;
+  if (this.incremental) {
+    if (s > FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) {
+      this.coolingFactor = Math.max(this.coolingFactor * FDLayoutConstants.COOLING_ADAPTATION_FACTOR, this.coolingFactor - (s - FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) / (FDLayoutConstants.ADAPTATION_UPPER_NODE_LIMIT - FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) * this.coolingFactor * (1 - FDLayoutConstants.COOLING_ADAPTATION_FACTOR));
+    }
+    this.maxNodeDisplacement = FDLayoutConstants.MAX_NODE_DISPLACEMENT_INCREMENTAL;
+  } else {
+    if (s > FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) {
+      this.coolingFactor = Math.max(FDLayoutConstants.COOLING_ADAPTATION_FACTOR, 1.0 - (s - FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) / (FDLayoutConstants.ADAPTATION_UPPER_NODE_LIMIT - FDLayoutConstants.ADAPTATION_LOWER_NODE_LIMIT) * (1 - FDLayoutConstants.COOLING_ADAPTATION_FACTOR));
+    } else {
+      this.coolingFactor = 1.0;
+    }
+    this.initialCoolingFactor = this.coolingFactor;
+    this.maxNodeDisplacement = FDLayoutConstants.MAX_NODE_DISPLACEMENT;
+  }
+
+  this.maxIterations = Math.max(this.getAllNodes().length * 5, this.maxIterations);
+
+  this.totalDisplacementThreshold = this.displacementThresholdPerNode * this.getAllNodes().length;
+
+  this.repulsionRange = this.calcRepulsionRange();
+};
+
+FDLayout.prototype.calcSpringForces = function () {
+  var lEdges = this.getAllEdges();
+  var edge;
+
+  for (var i = 0; i < lEdges.length; i++) {
+    edge = lEdges[i];
+
+    this.calcSpringForce(edge, edge.idealLength);
+  }
+};
+
+FDLayout.prototype.calcRepulsionForces = function () {
+  var gridUpdateAllowed = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
+  var forceToNodeSurroundingUpdate = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+
+  var i, j;
+  var nodeA, nodeB;
+  var lNodes = this.getAllNodes();
+  var processedNodeSet;
+
+  if (this.useFRGridVariant) {
+    if (this.totalIterations % FDLayoutConstants.GRID_CALCULATION_CHECK_PERIOD == 1 && gridUpdateAllowed) {
+      this.updateGrid();
+    }
+
+    processedNodeSet = new Set();
+
+    // calculate repulsion forces between each nodes and its surrounding
+    for (i = 0; i < lNodes.length; i++) {
+      nodeA = lNodes[i];
+      this.calculateRepulsionForceOfANode(nodeA, processedNodeSet, gridUpdateAllowed, forceToNodeSurroundingUpdate);
+      processedNodeSet.add(nodeA);
+    }
+  } else {
+    for (i = 0; i < lNodes.length; i++) {
+      nodeA = lNodes[i];
+
+      for (j = i + 1; j < lNodes.length; j++) {
+        nodeB = lNodes[j];
+
+        // If both nodes are not members of the same graph, skip.
+        if (nodeA.getOwner() != nodeB.getOwner()) {
+          continue;
+        }
+
+        this.calcRepulsionForce(nodeA, nodeB);
+      }
+    }
+  }
+};
+
+FDLayout.prototype.calcGravitationalForces = function () {
+  var node;
+  var lNodes = this.getAllNodesToApplyGravitation();
+
+  for (var i = 0; i < lNodes.length; i++) {
+    node = lNodes[i];
+    this.calcGravitationalForce(node);
+  }
+};
+
+FDLayout.prototype.moveNodes = function () {
+  var lNodes = this.getAllNodes();
+  var node;
+
+  for (var i = 0; i < lNodes.length; i++) {
+    node = lNodes[i];
+    node.move();
+  }
+};
+
+FDLayout.prototype.calcSpringForce = function (edge, idealLength) {
+  var sourceNode = edge.getSource();
+  var targetNode = edge.getTarget();
+
+  var length;
+  var springForce;
+  var springForceX;
+  var springForceY;
+
+  // Update edge length
+  if (this.uniformLeafNodeSizes && sourceNode.getChild() == null && targetNode.getChild() == null) {
+    edge.updateLengthSimple();
+  } else {
+    edge.updateLength();
+
+    if (edge.isOverlapingSourceAndTarget) {
+      return;
+    }
+  }
+
+  length = edge.getLength();
+
+  if (length == 0) return;
+
+  // Calculate spring forces
+  springForce = this.springConstant * (length - idealLength);
+
+  // Project force onto x and y axes
+  springForceX = springForce * (edge.lengthX / length);
+  springForceY = springForce * (edge.lengthY / length);
+
+  // Apply forces on the end nodes
+  sourceNode.springForceX += springForceX;
+  sourceNode.springForceY += springForceY;
+  targetNode.springForceX -= springForceX;
+  targetNode.springForceY -= springForceY;
+};
+
+FDLayout.prototype.calcRepulsionForce = function (nodeA, nodeB) {
+  var rectA = nodeA.getRect();
+  var rectB = nodeB.getRect();
+  var overlapAmount = new Array(2);
+  var clipPoints = new Array(4);
+  var distanceX;
+  var distanceY;
+  var distanceSquared;
+  var distance;
+  var repulsionForce;
+  var repulsionForceX;
+  var repulsionForceY;
+
+  if (rectA.intersects(rectB)) // two nodes overlap
+    {
+      // calculate separation amount in x and y directions
+      IGeometry.calcSeparationAmount(rectA, rectB, overlapAmount, FDLayoutConstants.DEFAULT_EDGE_LENGTH / 2.0);
+
+      repulsionForceX = 2 * overlapAmount[0];
+      repulsionForceY = 2 * overlapAmount[1];
+
+      var childrenConstant = nodeA.noOfChildren * nodeB.noOfChildren / (nodeA.noOfChildren + nodeB.noOfChildren);
+
+      // Apply forces on the two nodes
+      nodeA.repulsionForceX -= childrenConstant * repulsionForceX;
+      nodeA.repulsionForceY -= childrenConstant * repulsionForceY;
+      nodeB.repulsionForceX += childrenConstant * repulsionForceX;
+      nodeB.repulsionForceY += childrenConstant * repulsionForceY;
+    } else // no overlap
+    {
+      // calculate distance
+
+      if (this.uniformLeafNodeSizes && nodeA.getChild() == null && nodeB.getChild() == null) // simply base repulsion on distance of node centers
+        {
+          distanceX = rectB.getCenterX() - rectA.getCenterX();
+          distanceY = rectB.getCenterY() - rectA.getCenterY();
+        } else // use clipping points
+        {
+          IGeometry.getIntersection(rectA, rectB, clipPoints);
+
+          distanceX = clipPoints[2] - clipPoints[0];
+          distanceY = clipPoints[3] - clipPoints[1];
+        }
+
+      // No repulsion range. FR grid variant should take care of this.
+      if (Math.abs(distanceX) < FDLayoutConstants.MIN_REPULSION_DIST) {
+        distanceX = IMath.sign(distanceX) * FDLayoutConstants.MIN_REPULSION_DIST;
+      }
+
+      if (Math.abs(distanceY) < FDLayoutConstants.MIN_REPULSION_DIST) {
+        distanceY = IMath.sign(distanceY) * FDLayoutConstants.MIN_REPULSION_DIST;
+      }
+
+      distanceSquared = distanceX * distanceX + distanceY * distanceY;
+      distance = Math.sqrt(distanceSquared);
+
+      repulsionForce = this.repulsionConstant * nodeA.noOfChildren * nodeB.noOfChildren / distanceSquared;
+
+      // Project force onto x and y axes
+      repulsionForceX = repulsionForce * distanceX / distance;
+      repulsionForceY = repulsionForce * distanceY / distance;
+
+      // Apply forces on the two nodes    
+      nodeA.repulsionForceX -= repulsionForceX;
+      nodeA.repulsionForceY -= repulsionForceY;
+      nodeB.repulsionForceX += repulsionForceX;
+      nodeB.repulsionForceY += repulsionForceY;
+    }
+};
+
+FDLayout.prototype.calcGravitationalForce = function (node) {
+  var ownerGraph;
+  var ownerCenterX;
+  var ownerCenterY;
+  var distanceX;
+  var distanceY;
+  var absDistanceX;
+  var absDistanceY;
+  var estimatedSize;
+  ownerGraph = node.getOwner();
+
+  ownerCenterX = (ownerGraph.getRight() + ownerGraph.getLeft()) / 2;
+  ownerCenterY = (ownerGraph.getTop() + ownerGraph.getBottom()) / 2;
+  distanceX = node.getCenterX() - ownerCenterX;
+  distanceY = node.getCenterY() - ownerCenterY;
+  absDistanceX = Math.abs(distanceX) + node.getWidth() / 2;
+  absDistanceY = Math.abs(distanceY) + node.getHeight() / 2;
+
+  if (node.getOwner() == this.graphManager.getRoot()) // in the root graph
+    {
+      estimatedSize = ownerGraph.getEstimatedSize() * this.gravityRangeFactor;
+
+      if (absDistanceX > estimatedSize || absDistanceY > estimatedSize) {
+        node.gravitationForceX = -this.gravityConstant * distanceX;
+        node.gravitationForceY = -this.gravityConstant * distanceY;
+      }
+    } else // inside a compound
+    {
+      estimatedSize = ownerGraph.getEstimatedSize() * this.compoundGravityRangeFactor;
+
+      if (absDistanceX > estimatedSize || absDistanceY > estimatedSize) {
+        node.gravitationForceX = -this.gravityConstant * distanceX * this.compoundGravityConstant;
+        node.gravitationForceY = -this.gravityConstant * distanceY * this.compoundGravityConstant;
+      }
+    }
+};
+
+FDLayout.prototype.isConverged = function () {
+  var converged;
+  var oscilating = false;
+
+  if (this.totalIterations > this.maxIterations / 3) {
+    oscilating = Math.abs(this.totalDisplacement - this.oldTotalDisplacement) < 2;
+  }
+
+  converged = this.totalDisplacement < this.totalDisplacementThreshold;
+
+  this.oldTotalDisplacement = this.totalDisplacement;
+
+  return converged || oscilating;
+};
+
+FDLayout.prototype.animate = function () {
+  if (this.animationDuringLayout && !this.isSubLayout) {
+    if (this.notAnimatedIterations == this.animationPeriod) {
+      this.update();
+      this.notAnimatedIterations = 0;
+    } else {
+      this.notAnimatedIterations++;
+    }
+  }
+};
+
+//This method calculates the number of children (weight) for all nodes
+FDLayout.prototype.calcNoOfChildrenForAllNodes = function () {
+  var node;
+  var allNodes = this.graphManager.getAllNodes();
+
+  for (var i = 0; i < allNodes.length; i++) {
+    node = allNodes[i];
+    node.noOfChildren = node.getNoOfChildren();
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Section: FR-Grid Variant Repulsion Force Calculation
+// -----------------------------------------------------------------------------
+
+FDLayout.prototype.calcGrid = function (graph) {
+
+  var sizeX = 0;
+  var sizeY = 0;
+
+  sizeX = parseInt(Math.ceil((graph.getRight() - graph.getLeft()) / this.repulsionRange));
+  sizeY = parseInt(Math.ceil((graph.getBottom() - graph.getTop()) / this.repulsionRange));
+
+  var grid = new Array(sizeX);
+
+  for (var i = 0; i < sizeX; i++) {
+    grid[i] = new Array(sizeY);
+  }
+
+  for (var i = 0; i < sizeX; i++) {
+    for (var j = 0; j < sizeY; j++) {
+      grid[i][j] = new Array();
+    }
+  }
+
+  return grid;
+};
+
+FDLayout.prototype.addNodeToGrid = function (v, left, top) {
+
+  var startX = 0;
+  var finishX = 0;
+  var startY = 0;
+  var finishY = 0;
+
+  startX = parseInt(Math.floor((v.getRect().x - left) / this.repulsionRange));
+  finishX = parseInt(Math.floor((v.getRect().width + v.getRect().x - left) / this.repulsionRange));
+  startY = parseInt(Math.floor((v.getRect().y - top) / this.repulsionRange));
+  finishY = parseInt(Math.floor((v.getRect().height + v.getRect().y - top) / this.repulsionRange));
+
+  for (var i = startX; i <= finishX; i++) {
+    for (var j = startY; j <= finishY; j++) {
+      this.grid[i][j].push(v);
+      v.setGridCoordinates(startX, finishX, startY, finishY);
+    }
+  }
+};
+
+FDLayout.prototype.updateGrid = function () {
+  var i;
+  var nodeA;
+  var lNodes = this.getAllNodes();
+
+  this.grid = this.calcGrid(this.graphManager.getRoot());
+
+  // put all nodes to proper grid cells
+  for (i = 0; i < lNodes.length; i++) {
+    nodeA = lNodes[i];
+    this.addNodeToGrid(nodeA, this.graphManager.getRoot().getLeft(), this.graphManager.getRoot().getTop());
+  }
+};
+
+FDLayout.prototype.calculateRepulsionForceOfANode = function (nodeA, processedNodeSet, gridUpdateAllowed, forceToNodeSurroundingUpdate) {
+
+  if (this.totalIterations % FDLayoutConstants.GRID_CALCULATION_CHECK_PERIOD == 1 && gridUpdateAllowed || forceToNodeSurroundingUpdate) {
+    var surrounding = new Set();
+    nodeA.surrounding = new Array();
+    var nodeB;
+    var grid = this.grid;
+
+    for (var i = nodeA.startX - 1; i < nodeA.finishX + 2; i++) {
+      for (var j = nodeA.startY - 1; j < nodeA.finishY + 2; j++) {
+        if (!(i < 0 || j < 0 || i >= grid.length || j >= grid[0].length)) {
+          for (var k = 0; k < grid[i][j].length; k++) {
+            nodeB = grid[i][j][k];
+
+            // If both nodes are not members of the same graph, 
+            // or both nodes are the same, skip.
+            if (nodeA.getOwner() != nodeB.getOwner() || nodeA == nodeB) {
+              continue;
+            }
+
+            // check if the repulsion force between
+            // nodeA and nodeB has already been calculated
+            if (!processedNodeSet.has(nodeB) && !surrounding.has(nodeB)) {
+              var distanceX = Math.abs(nodeA.getCenterX() - nodeB.getCenterX()) - (nodeA.getWidth() / 2 + nodeB.getWidth() / 2);
+              var distanceY = Math.abs(nodeA.getCenterY() - nodeB.getCenterY()) - (nodeA.getHeight() / 2 + nodeB.getHeight() / 2);
+
+              // if the distance between nodeA and nodeB 
+              // is less then calculation range
+              if (distanceX <= this.repulsionRange && distanceY <= this.repulsionRange) {
+                //then add nodeB to surrounding of nodeA
+                surrounding.add(nodeB);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    nodeA.surrounding = [].concat(_toConsumableArray(surrounding));
+  }
+  for (i = 0; i < nodeA.surrounding.length; i++) {
+    this.calcRepulsionForce(nodeA, nodeA.surrounding[i]);
+  }
+};
+
+FDLayout.prototype.calcRepulsionRange = function () {
+  return 0.0;
+};
+
+module.exports = FDLayout;
+
+/***/ }),
+/* 19 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LEdge = __webpack_require__(1);
+var FDLayoutConstants = __webpack_require__(7);
+
+function FDLayoutEdge(source, target, vEdge) {
+  LEdge.call(this, source, target, vEdge);
+  this.idealLength = FDLayoutConstants.DEFAULT_EDGE_LENGTH;
+}
+
+FDLayoutEdge.prototype = Object.create(LEdge.prototype);
+
+for (var prop in LEdge) {
+  FDLayoutEdge[prop] = LEdge[prop];
+}
+
+module.exports = FDLayoutEdge;
+
+/***/ }),
+/* 20 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var LNode = __webpack_require__(3);
+
+function FDLayoutNode(gm, loc, size, vNode) {
+  // alternative constructor is handled inside LNode
+  LNode.call(this, gm, loc, size, vNode);
+  //Spring, repulsion and gravitational forces acting on this node
+  this.springForceX = 0;
+  this.springForceY = 0;
+  this.repulsionForceX = 0;
+  this.repulsionForceY = 0;
+  this.gravitationForceX = 0;
+  this.gravitationForceY = 0;
+  //Amount by which this node is to be moved in this iteration
+  this.displacementX = 0;
+  this.displacementY = 0;
+
+  //Start and finish grid coordinates that this node is fallen into
+  this.startX = 0;
+  this.finishX = 0;
+  this.startY = 0;
+  this.finishY = 0;
+
+  //Geometric neighbors of this node
+  this.surrounding = [];
+}
+
+FDLayoutNode.prototype = Object.create(LNode.prototype);
+
+for (var prop in LNode) {
+  FDLayoutNode[prop] = LNode[prop];
+}
+
+FDLayoutNode.prototype.setGridCoordinates = function (_startX, _finishX, _startY, _finishY) {
+  this.startX = _startX;
+  this.finishX = _finishX;
+  this.startY = _startY;
+  this.finishY = _finishY;
+};
+
+module.exports = FDLayoutNode;
+
+/***/ }),
+/* 21 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function DimensionD(width, height) {
+  this.width = 0;
+  this.height = 0;
+  if (width !== null && height !== null) {
+    this.height = height;
+    this.width = width;
+  }
+}
+
+DimensionD.prototype.getWidth = function () {
+  return this.width;
+};
+
+DimensionD.prototype.setWidth = function (width) {
+  this.width = width;
+};
+
+DimensionD.prototype.getHeight = function () {
+  return this.height;
+};
+
+DimensionD.prototype.setHeight = function (height) {
+  this.height = height;
+};
+
+module.exports = DimensionD;
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var UniqueIDGeneretor = __webpack_require__(14);
+
+function HashMap() {
+  this.map = {};
+  this.keys = [];
+}
+
+HashMap.prototype.put = function (key, value) {
+  var theId = UniqueIDGeneretor.createID(key);
+  if (!this.contains(theId)) {
+    this.map[theId] = value;
+    this.keys.push(key);
+  }
+};
+
+HashMap.prototype.contains = function (key) {
+  var theId = UniqueIDGeneretor.createID(key);
+  return this.map[key] != null;
+};
+
+HashMap.prototype.get = function (key) {
+  var theId = UniqueIDGeneretor.createID(key);
+  return this.map[theId];
+};
+
+HashMap.prototype.keySet = function () {
+  return this.keys;
+};
+
+module.exports = HashMap;
+
+/***/ }),
+/* 23 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var UniqueIDGeneretor = __webpack_require__(14);
+
+function HashSet() {
+  this.set = {};
+}
+;
+
+HashSet.prototype.add = function (obj) {
+  var theId = UniqueIDGeneretor.createID(obj);
+  if (!this.contains(theId)) this.set[theId] = obj;
+};
+
+HashSet.prototype.remove = function (obj) {
+  delete this.set[UniqueIDGeneretor.createID(obj)];
+};
+
+HashSet.prototype.clear = function () {
+  this.set = {};
+};
+
+HashSet.prototype.contains = function (obj) {
+  return this.set[UniqueIDGeneretor.createID(obj)] == obj;
+};
+
+HashSet.prototype.isEmpty = function () {
+  return this.size() === 0;
+};
+
+HashSet.prototype.size = function () {
+  return Object.keys(this.set).length;
+};
+
+//concats this.set to the given list
+HashSet.prototype.addAllTo = function (list) {
+  var keys = Object.keys(this.set);
+  var length = keys.length;
+  for (var i = 0; i < length; i++) {
+    list.push(this.set[keys[i]]);
+  }
+};
+
+HashSet.prototype.size = function () {
+  return Object.keys(this.set).length;
+};
+
+HashSet.prototype.addAll = function (list) {
+  var s = list.length;
+  for (var i = 0; i < s; i++) {
+    var v = list[i];
+    this.add(v);
+  }
+};
+
+module.exports = HashSet;
+
+/***/ }),
+/* 24 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+ * A classic Quicksort algorithm with Hoare's partition
+ * - Works also on LinkedList objects
+ *
+ * Copyright: i-Vis Research Group, Bilkent University, 2007 - present
+ */
+
+var LinkedList = __webpack_require__(11);
+
+var Quicksort = function () {
+    function Quicksort(A, compareFunction) {
+        _classCallCheck(this, Quicksort);
+
+        if (compareFunction !== null || compareFunction !== undefined) this.compareFunction = this._defaultCompareFunction;
+
+        var length = void 0;
+        if (A instanceof LinkedList) length = A.size();else length = A.length;
+
+        this._quicksort(A, 0, length - 1);
+    }
+
+    _createClass(Quicksort, [{
+        key: '_quicksort',
+        value: function _quicksort(A, p, r) {
+            if (p < r) {
+                var q = this._partition(A, p, r);
+                this._quicksort(A, p, q);
+                this._quicksort(A, q + 1, r);
+            }
+        }
+    }, {
+        key: '_partition',
+        value: function _partition(A, p, r) {
+            var x = this._get(A, p);
+            var i = p;
+            var j = r;
+            while (true) {
+                while (this.compareFunction(x, this._get(A, j))) {
+                    j--;
+                }while (this.compareFunction(this._get(A, i), x)) {
+                    i++;
+                }if (i < j) {
+                    this._swap(A, i, j);
+                    i++;
+                    j--;
+                } else return j;
+            }
+        }
+    }, {
+        key: '_get',
+        value: function _get(object, index) {
+            if (object instanceof LinkedList) return object.get_object_at(index);else return object[index];
+        }
+    }, {
+        key: '_set',
+        value: function _set(object, index, value) {
+            if (object instanceof LinkedList) object.set_object_at(index, value);else object[index] = value;
+        }
+    }, {
+        key: '_swap',
+        value: function _swap(A, i, j) {
+            var temp = this._get(A, i);
+            this._set(A, i, this._get(A, j));
+            this._set(A, j, temp);
+        }
+    }, {
+        key: '_defaultCompareFunction',
+        value: function _defaultCompareFunction(a, b) {
+            return b > a;
+        }
+    }]);
+
+    return Quicksort;
+}();
+
+module.exports = Quicksort;
+
+/***/ }),
+/* 25 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+ *   Needleman-Wunsch algorithm is an procedure to compute the optimal global alignment of two string
+ *   sequences by S.B.Needleman and C.D.Wunsch (1970).
+ *
+ *   Aside from the inputs, you can assign the scores for,
+ *   - Match: The two characters at the current index are same.
+ *   - Mismatch: The two characters at the current index are different.
+ *   - Insertion/Deletion(gaps): The best alignment involves one letter aligning to a gap in the other string.
+ */
+
+var NeedlemanWunsch = function () {
+    function NeedlemanWunsch(sequence1, sequence2) {
+        var match_score = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1;
+        var mismatch_penalty = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : -1;
+        var gap_penalty = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : -1;
+
+        _classCallCheck(this, NeedlemanWunsch);
+
+        this.sequence1 = sequence1;
+        this.sequence2 = sequence2;
+        this.match_score = match_score;
+        this.mismatch_penalty = mismatch_penalty;
+        this.gap_penalty = gap_penalty;
+
+        // Just the remove redundancy
+        this.iMax = sequence1.length + 1;
+        this.jMax = sequence2.length + 1;
+
+        // Grid matrix of scores
+        this.grid = new Array(this.iMax);
+        for (var i = 0; i < this.iMax; i++) {
+            this.grid[i] = new Array(this.jMax);
+
+            for (var j = 0; j < this.jMax; j++) {
+                this.grid[i][j] = 0;
+            }
+        }
+
+        // Traceback matrix (2D array, each cell is an array of boolean values for [`Diag`, `Up`, `Left`] positions)
+        this.tracebackGrid = new Array(this.iMax);
+        for (var _i = 0; _i < this.iMax; _i++) {
+            this.tracebackGrid[_i] = new Array(this.jMax);
+
+            for (var _j = 0; _j < this.jMax; _j++) {
+                this.tracebackGrid[_i][_j] = [null, null, null];
+            }
+        }
+
+        // The aligned sequences (return multiple possibilities)
+        this.alignments = [];
+
+        // Final alignment score
+        this.score = -1;
+
+        // Calculate scores and tracebacks
+        this.computeGrids();
+    }
+
+    _createClass(NeedlemanWunsch, [{
+        key: "getScore",
+        value: function getScore() {
+            return this.score;
+        }
+    }, {
+        key: "getAlignments",
+        value: function getAlignments() {
+            return this.alignments;
+        }
+
+        // Main dynamic programming procedure
+
+    }, {
+        key: "computeGrids",
+        value: function computeGrids() {
+            // Fill in the first row
+            for (var j = 1; j < this.jMax; j++) {
+                this.grid[0][j] = this.grid[0][j - 1] + this.gap_penalty;
+                this.tracebackGrid[0][j] = [false, false, true];
+            }
+
+            // Fill in the first column
+            for (var i = 1; i < this.iMax; i++) {
+                this.grid[i][0] = this.grid[i - 1][0] + this.gap_penalty;
+                this.tracebackGrid[i][0] = [false, true, false];
+            }
+
+            // Fill the rest of the grid
+            for (var _i2 = 1; _i2 < this.iMax; _i2++) {
+                for (var _j2 = 1; _j2 < this.jMax; _j2++) {
+                    // Find the max score(s) among [`Diag`, `Up`, `Left`]
+                    var diag = void 0;
+                    if (this.sequence1[_i2 - 1] === this.sequence2[_j2 - 1]) diag = this.grid[_i2 - 1][_j2 - 1] + this.match_score;else diag = this.grid[_i2 - 1][_j2 - 1] + this.mismatch_penalty;
+
+                    var up = this.grid[_i2 - 1][_j2] + this.gap_penalty;
+                    var left = this.grid[_i2][_j2 - 1] + this.gap_penalty;
+
+                    // If there exists multiple max values, capture them for multiple paths
+                    var maxOf = [diag, up, left];
+                    var indices = this.arrayAllMaxIndexes(maxOf);
+
+                    // Update Grids
+                    this.grid[_i2][_j2] = maxOf[indices[0]];
+                    this.tracebackGrid[_i2][_j2] = [indices.includes(0), indices.includes(1), indices.includes(2)];
+                }
+            }
+
+            // Update alignment score
+            this.score = this.grid[this.iMax - 1][this.jMax - 1];
+        }
+
+        // Gets all possible valid sequence combinations
+
+    }, {
+        key: "alignmentTraceback",
+        value: function alignmentTraceback() {
+            var inProcessAlignments = [];
+
+            inProcessAlignments.push({ pos: [this.sequence1.length, this.sequence2.length],
+                seq1: "",
+                seq2: ""
+            });
+
+            while (inProcessAlignments[0]) {
+                var current = inProcessAlignments[0];
+                var directions = this.tracebackGrid[current.pos[0]][current.pos[1]];
+
+                if (directions[0]) {
+                    inProcessAlignments.push({ pos: [current.pos[0] - 1, current.pos[1] - 1],
+                        seq1: this.sequence1[current.pos[0] - 1] + current.seq1,
+                        seq2: this.sequence2[current.pos[1] - 1] + current.seq2
+                    });
+                }
+                if (directions[1]) {
+                    inProcessAlignments.push({ pos: [current.pos[0] - 1, current.pos[1]],
+                        seq1: this.sequence1[current.pos[0] - 1] + current.seq1,
+                        seq2: '-' + current.seq2
+                    });
+                }
+                if (directions[2]) {
+                    inProcessAlignments.push({ pos: [current.pos[0], current.pos[1] - 1],
+                        seq1: '-' + current.seq1,
+                        seq2: this.sequence2[current.pos[1] - 1] + current.seq2
+                    });
+                }
+
+                if (current.pos[0] === 0 && current.pos[1] === 0) this.alignments.push({ sequence1: current.seq1,
+                    sequence2: current.seq2
+                });
+
+                inProcessAlignments.shift();
+            }
+
+            return this.alignments;
+        }
+
+        // Helper Functions
+
+    }, {
+        key: "getAllIndexes",
+        value: function getAllIndexes(arr, val) {
+            var indexes = [],
+                i = -1;
+            while ((i = arr.indexOf(val, i + 1)) !== -1) {
+                indexes.push(i);
+            }
+            return indexes;
+        }
+    }, {
+        key: "arrayAllMaxIndexes",
+        value: function arrayAllMaxIndexes(array) {
+            return this.getAllIndexes(array, Math.max.apply(null, array));
+        }
+    }]);
+
+    return NeedlemanWunsch;
+}();
+
+module.exports = NeedlemanWunsch;
+
+/***/ }),
+/* 26 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var layoutBase = function layoutBase() {
+  return;
+};
+
+layoutBase.FDLayout = __webpack_require__(18);
+layoutBase.FDLayoutConstants = __webpack_require__(7);
+layoutBase.FDLayoutEdge = __webpack_require__(19);
+layoutBase.FDLayoutNode = __webpack_require__(20);
+layoutBase.DimensionD = __webpack_require__(21);
+layoutBase.HashMap = __webpack_require__(22);
+layoutBase.HashSet = __webpack_require__(23);
+layoutBase.IGeometry = __webpack_require__(8);
+layoutBase.IMath = __webpack_require__(9);
+layoutBase.Integer = __webpack_require__(10);
+layoutBase.Point = __webpack_require__(12);
+layoutBase.PointD = __webpack_require__(4);
+layoutBase.RandomSeed = __webpack_require__(16);
+layoutBase.RectangleD = __webpack_require__(13);
+layoutBase.Transform = __webpack_require__(17);
+layoutBase.UniqueIDGeneretor = __webpack_require__(14);
+layoutBase.Quicksort = __webpack_require__(24);
+layoutBase.LinkedList = __webpack_require__(11);
+layoutBase.LGraphObject = __webpack_require__(2);
+layoutBase.LGraph = __webpack_require__(5);
+layoutBase.LEdge = __webpack_require__(1);
+layoutBase.LGraphManager = __webpack_require__(6);
+layoutBase.LNode = __webpack_require__(3);
+layoutBase.Layout = __webpack_require__(15);
+layoutBase.LayoutConstants = __webpack_require__(0);
+layoutBase.NeedlemanWunsch = __webpack_require__(25);
+
+module.exports = layoutBase;
+
+/***/ }),
+/* 27 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function Emitter() {
+  this.listeners = [];
+}
+
+var p = Emitter.prototype;
+
+p.addListener = function (event, callback) {
+  this.listeners.push({
+    event: event,
+    callback: callback
+  });
+};
+
+p.removeListener = function (event, callback) {
+  for (var i = this.listeners.length; i >= 0; i--) {
+    var l = this.listeners[i];
+
+    if (l.event === event && l.callback === callback) {
+      this.listeners.splice(i, 1);
+    }
+  }
+};
+
+p.emit = function (event, data) {
+  for (var i = 0; i < this.listeners.length; i++) {
+    var l = this.listeners[i];
+
+    if (event === l.event) {
+      l.callback(data);
+    }
+  }
+};
+
+module.exports = Emitter;
+
+/***/ })
+/******/ ]);
+});
+
+/***/ }),
+
 /***/ "../node_modules/lodash.debounce/index.js":
 /*!************************************************!*\
   !*** ../node_modules/lodash.debounce/index.js ***!
@@ -36501,1680 +40163,6 @@ function __importDefault(mod) {
 
 /***/ }),
 
-/***/ "../node_modules/weaverjs/dist/weaver.js":
-/*!***********************************************!*\
-  !*** ../node_modules/weaverjs/dist/weaver.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(setImmediate, __dirname) {var require;var require;/*!
-Copyright © 2016 Max Franz
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the “Software”), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
-
-(function(f){if(true){module.exports=f()}else { var g; }})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return require(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
-'use strict';
-
-var is = _dereq_('./is');
-var util = _dereq_('./util');
-var Promise = _dereq_('./promise');
-var Event = _dereq_('./event');
-
-var define = {
-
-  // event function reusable stuff
-  event: {
-    regex: /(\w+)(\.\w+)?/, // regex for matching event strings (e.g. "click.namespace")
-    optionalTypeRegex: /(\w+)?(\.\w+)?/,
-    falseCallback: function(){ return false; }
-  },
-
-  // event binding
-  on: function( params ){
-    var defaults = {
-      unbindSelfOnTrigger: false,
-      unbindAllBindersOnTrigger: false
-    };
-    params = util.extend({}, defaults, params);
-
-    return function onImpl(events, data, callback){
-      var self = this;
-      var selfIsArrayLike = self.length !== undefined;
-      var all = selfIsArrayLike ? self : [self]; // put in array if not array-like
-      var eventsIsString = is.string(events);
-      var p = params;
-
-      if( is.fn(data) || data === false ){ // data is actually callback
-        callback = data;
-        data = undefined;
-      }
-
-      // if there isn't a callback, we can't really do anything
-      // (can't speak for mapped events arg version)
-      if( !(is.fn(callback) || callback === false) && eventsIsString ){
-        return self; // maintain chaining
-      }
-
-      if( eventsIsString ){ // then convert to map
-        var map = {};
-        map[ events ] = callback;
-        events = map;
-      }
-
-      for( var evts in events ){
-        callback = events[evts];
-        if( callback === false ){
-          callback = define.event.falseCallback;
-        }
-
-        if( !is.fn(callback) ){ continue; }
-
-        evts = evts.split(/\s+/);
-        for( var i = 0; i < evts.length; i++ ){
-          var evt = evts[i];
-          if( is.emptyString(evt) ){ continue; }
-
-          var match = evt.match( define.event.regex ); // type[.namespace]
-
-          if( match ){
-            var type = match[1];
-            var namespace = match[2] ? match[2] : undefined;
-
-            var listener = {
-              callback: callback, // callback to run
-              data: data, // extra data in eventObj.data
-              type: type, // the event type (e.g. 'click')
-              namespace: namespace, // the event namespace (e.g. ".foo")
-              unbindSelfOnTrigger: p.unbindSelfOnTrigger,
-              unbindAllBindersOnTrigger: p.unbindAllBindersOnTrigger,
-              binders: all // who bound together
-            };
-
-            for( var j = 0; j < all.length; j++ ){
-              var _p = all[j]._private;
-
-              _p.listeners = _p.listeners || [];
-              _p.listeners.push( listener );
-            }
-          }
-        } // for events array
-      } // for events map
-
-      return self; // maintain chaining
-    }; // function
-  }, // on
-
-  eventAliasesOn: function( proto ){
-    var p = proto;
-
-    p.addListener = p.listen = p.bind = p.on;
-    p.removeListener = p.unlisten = p.unbind = p.off;
-    p.emit = p.trigger;
-
-    // this is just a wrapper alias of .on()
-    p.pon = p.promiseOn = function( events, selector ){
-      var self = this;
-      var args = Array.prototype.slice.call( arguments, 0 );
-
-      return new Promise(function( resolve, reject ){
-        var callback = function( e ){
-          self.off.apply( self, offArgs );
-
-          resolve( e );
-        };
-
-        var onArgs = args.concat([ callback ]);
-        var offArgs = onArgs.concat([]);
-
-        self.on.apply( self, onArgs );
-      });
-    };
-  },
-
-  off: function offImpl( params ){
-    var defaults = {
-    };
-    params = util.extend({}, defaults, params);
-
-    return function(events, callback){
-      var self = this;
-      var selfIsArrayLike = self.length !== undefined;
-      var all = selfIsArrayLike ? self : [self]; // put in array if not array-like
-      var eventsIsString = is.string(events);
-
-      if( arguments.length === 0 ){ // then unbind all
-
-        for( var i = 0; i < all.length; i++ ){
-          all[i]._private.listeners = [];
-        }
-
-        return self; // maintain chaining
-      }
-
-      if( eventsIsString ){ // then convert to map
-        var map = {};
-        map[ events ] = callback;
-        events = map;
-      }
-
-      for( var evts in events ){
-        callback = events[evts];
-
-        if( callback === false ){
-          callback = define.event.falseCallback;
-        }
-
-        evts = evts.split(/\s+/);
-        for( var h = 0; h < evts.length; h++ ){
-          var evt = evts[h];
-          if( is.emptyString(evt) ){ continue; }
-
-          var match = evt.match( define.event.optionalTypeRegex ); // [type][.namespace]
-          if( match ){
-            var type = match[1] ? match[1] : undefined;
-            var namespace = match[2] ? match[2] : undefined;
-
-            for( var i = 0; i < all.length; i++ ){ //
-              var listeners = all[i]._private.listeners = all[i]._private.listeners || [];
-
-              for( var j = 0; j < listeners.length; j++ ){
-                var listener = listeners[j];
-                var nsMatches = !namespace || namespace === listener.namespace;
-                var typeMatches = !type || listener.type === type;
-                var cbMatches = !callback || callback === listener.callback;
-                var listenerMatches = nsMatches && typeMatches && cbMatches;
-
-                // delete listener if it matches
-                if( listenerMatches ){
-                  listeners.splice(j, 1);
-                  j--;
-                }
-              } // for listeners
-            } // for all
-          } // if match
-        } // for events array
-
-      } // for events map
-
-      return self; // maintain chaining
-    }; // function
-  }, // off
-
-  trigger: function( params ){
-    var defaults = {};
-    params = util.extend({}, defaults, params);
-
-    return function triggerImpl(events, extraParams, fnToTrigger){
-      var self = this;
-      var selfIsArrayLike = self.length !== undefined;
-      var all = selfIsArrayLike ? self : [self]; // put in array if not array-like
-      var eventsIsString = is.string(events);
-      var eventsIsObject = is.plainObject(events);
-      var eventsIsEvent = is.event(events);
-
-      if( eventsIsString ){ // then make a plain event object for each event name
-        var evts = events.split(/\s+/);
-        events = [];
-
-        for( var i = 0; i < evts.length; i++ ){
-          var evt = evts[i];
-          if( is.emptyString(evt) ){ continue; }
-
-          var match = evt.match( define.event.regex ); // type[.namespace]
-          var type = match[1];
-          var namespace = match[2] ? match[2] : undefined;
-
-          events.push( {
-            type: type,
-            namespace: namespace
-          } );
-        }
-      } else if( eventsIsObject ){ // put in length 1 array
-        var eventArgObj = events;
-
-        events = [ eventArgObj ];
-      }
-
-      if( extraParams ){
-        if( !is.array(extraParams) ){ // make sure extra params are in an array if specified
-          extraParams = [ extraParams ];
-        }
-      } else { // otherwise, we've got nothing
-        extraParams = [];
-      }
-
-      for( var i = 0; i < events.length; i++ ){ // trigger each event in order
-        var evtObj = events[i];
-
-        for( var j = 0; j < all.length; j++ ){ // for each
-          var triggerer = all[j];
-          var listeners = triggerer._private.listeners = triggerer._private.listeners || [];
-          var bubbleUp = false;
-
-          // create the event for this element from the event object
-          var evt;
-
-          if( eventsIsEvent ){ // then just get the object
-            evt = evtObj;
-
-          } else { // then we have to make one
-            evt = new Event( evtObj, {
-              namespace: evtObj.namespace
-            } );
-          }
-
-          if( fnToTrigger ){ // then override the listeners list with just the one we specified
-            listeners = [{
-              namespace: evt.namespace,
-              type: evt.type,
-              callback: fnToTrigger
-            }];
-          }
-
-          for( var k = 0; k < listeners.length; k++ ){ // check each listener
-            var lis = listeners[k];
-            var nsMatches = !lis.namespace || lis.namespace === evt.namespace;
-            var typeMatches = lis.type === evt.type;
-            var targetMatches = true;
-            var listenerMatches = nsMatches && typeMatches && targetMatches;
-
-            if( listenerMatches ){ // then trigger it
-              var args = [ evt ];
-              args = args.concat( extraParams ); // add extra params to args list
-
-              if( lis.data ){ // add on data plugged into binding
-                evt.data = lis.data;
-              } else { // or clear it in case the event obj is reused
-                evt.data = undefined;
-              }
-
-              if( lis.unbindSelfOnTrigger || lis.unbindAllBindersOnTrigger ){ // then remove listener
-                listeners.splice(k, 1);
-                k--;
-              }
-
-              if( lis.unbindAllBindersOnTrigger ){ // then delete the listener for all binders
-                var binders = lis.binders;
-                for( var l = 0; l < binders.length; l++ ){
-                  var binder = binders[l];
-                  if( !binder || binder === triggerer ){ continue; } // already handled triggerer or we can't handle it
-
-                  var binderListeners = binder._private.listeners;
-                  for( var m = 0; m < binderListeners.length; m++ ){
-                    var binderListener = binderListeners[m];
-
-                    if( binderListener === lis ){ // delete listener from list
-                      binderListeners.splice(m, 1);
-                      m--;
-                    }
-                  }
-                }
-              }
-
-              // run the callback
-              var context = triggerer;
-              var ret = lis.callback.apply( context, args );
-
-              if( ret === false || evt.isPropagationStopped() ){
-                // then don't bubble
-                bubbleUp = false;
-
-                if( ret === false ){
-                  // returning false is a shorthand for stopping propagation and preventing the def. action
-                  evt.stopPropagation();
-                  evt.preventDefault();
-                }
-              }
-            } // if listener matches
-          } // for each listener
-
-          if( bubbleUp ){
-            // TODO if bubbling is supported...
-          }
-
-        } // for each of all
-      } // for each event
-
-      return self; // maintain chaining
-    }; // function
-  } // trigger
-
-}; // define
-
-module.exports = define;
-
-},{"./event":2,"./is":5,"./promise":6,"./util":8}],2:[function(_dereq_,module,exports){
-'use strict';
-
-// https://github.com/jquery/jquery/blob/master/src/event.js
-
-var Event = function( src, props ) {
-  // Allow instantiation without the 'new' keyword
-  if ( !(this instanceof Event) ) {
-    return new Event( src, props );
-  }
-
-  // Event object
-  if ( src && src.type ) {
-    this.originalEvent = src;
-    this.type = src.type;
-
-    // Events bubbling up the document may have been marked as prevented
-    // by a handler lower down the tree; reflect the correct value.
-    this.isDefaultPrevented = ( src.defaultPrevented ) ? returnTrue : returnFalse;
-
-  // Event type
-  } else {
-    this.type = src;
-  }
-
-  // Put explicitly provided properties onto the event object
-  if ( props ) {
-
-    // more efficient to manually copy fields we use
-    this.type = props.type !== undefined ? props.type : this.type;
-    this.namespace = props.namespace;
-    this.layout = props.layout;
-    this.data = props.data;
-    this.message = props.message;
-  }
-
-  // Create a timestamp if incoming event doesn't have one
-  this.timeStamp = src && src.timeStamp || +new Date();
-};
-
-function returnFalse() {
-  return false;
-}
-function returnTrue() {
-  return true;
-}
-
-// jQuery.Event is based on DOM3 Events as specified by the ECMAScript Language Binding
-// http://www.w3.org/TR/2003/WD-DOM-Level-3-Events-20030331/ecma-script-binding.html
-Event.prototype = {
-  instanceString: function(){ return 'event'; },
-
-  preventDefault: function() {
-    this.isDefaultPrevented = returnTrue;
-
-    var e = this.originalEvent;
-    if ( !e ) {
-      return;
-    }
-
-    // if preventDefault exists run it on the original event
-    if ( e.preventDefault ) {
-      e.preventDefault();
-    }
-  },
-
-  stopPropagation: function() {
-    this.isPropagationStopped = returnTrue;
-
-    var e = this.originalEvent;
-    if ( !e ) {
-      return;
-    }
-    // if stopPropagation exists run it on the original event
-    if ( e.stopPropagation ) {
-      e.stopPropagation();
-    }
-  },
-
-  stopImmediatePropagation: function() {
-    this.isImmediatePropagationStopped = returnTrue;
-    this.stopPropagation();
-  },
-
-  isDefaultPrevented: returnFalse,
-  isPropagationStopped: returnFalse,
-  isImmediatePropagationStopped: returnFalse
-};
-
-
-module.exports = Event;
-
-},{}],3:[function(_dereq_,module,exports){
-/*! Weaver licensed under MIT (https://tldrlegal.com/license/mit-license), copyright Max Franz */
-
-'use strict';
-
-var is = _dereq_('./is');
-var util = _dereq_('./util');
-var Thread = _dereq_('./thread');
-var Promise = _dereq_('./promise');
-var define = _dereq_('./define');
-
-var Fabric = function( N ){
-  if( !(this instanceof Fabric) ){
-    return new Fabric( N );
-  }
-
-  this._private = {
-    pass: []
-  };
-
-  var defN = 4;
-
-  if( is.number(N) ){
-    // then use the specified number of threads
-  } if( typeof navigator !== 'undefined' && navigator.hardwareConcurrency != null ){
-    N = navigator.hardwareConcurrency;
-  } else {
-    try{
-      N = _dereq_('os').cpus().length;
-    } catch( err ){
-      N = defN;
-    }
-  } // TODO could use an estimation here but would the additional expense be worth it?
-
-  for( var i = 0; i < N; i++ ){
-    this[i] = new Thread();
-  }
-
-  this.length = N;
-};
-
-var fabfn = Fabric.prototype; // short alias
-
-util.extend(fabfn, {
-
-  instanceString: function(){ return 'fabric'; },
-
-  // require fn in all threads
-  require: function( fn, as ){
-    for( var i = 0; i < this.length; i++ ){
-      var thread = this[i];
-
-      thread.require( fn, as );
-    }
-
-    return this;
-  },
-
-  // get a random thread
-  random: function(){
-    var i = Math.round( (this.length - 1) * Math.random() );
-    var thread = this[i];
-
-    return thread;
-  },
-
-  // run on random thread
-  run: function( fn ){
-    var pass = this._private.pass.shift();
-
-    return this.random().pass( pass ).run( fn );
-  },
-
-  // sends a random thread a message
-  message: function( m ){
-    return this.random().message( m );
-  },
-
-  // send all threads a message
-  broadcast: function( m ){
-    for( var i = 0; i < this.length; i++ ){
-      var thread = this[i];
-
-      thread.message( m );
-    }
-
-    return this; // chaining
-  },
-
-  // stop all threads
-  stop: function(){
-    for( var i = 0; i < this.length; i++ ){
-      var thread = this[i];
-
-      thread.stop();
-    }
-
-    return this; // chaining
-  },
-
-  // pass data to be used with .spread() etc.
-  pass: function( data ){
-    var pass = this._private.pass;
-
-    if( is.array(data) ){
-      pass.push( data );
-    } else {
-      throw 'Only arrays may be used with fabric.pass()';
-    }
-
-    return this; // chaining
-  },
-
-  spreadSize: function(){
-    var subsize =  Math.ceil( this._private.pass[0].length / this.length );
-
-    subsize = Math.max( 1, subsize ); // don't pass less than one ele to each thread
-
-    return subsize;
-  },
-
-  // split the data into slices to spread the data equally among threads
-  spread: function( fn ){
-    var self = this;
-    var _p = self._private;
-    var subsize = self.spreadSize(); // number of pass eles to handle in each thread
-    var pass = _p.pass.shift().concat([]); // keep a copy
-    var runPs = [];
-
-    for( var i = 0; i < this.length; i++ ){
-      var thread = this[i];
-      var slice = pass.splice( 0, subsize );
-
-      var runP = thread.pass( slice ).run( fn );
-
-      runPs.push( runP );
-
-      var doneEarly = pass.length === 0;
-      if( doneEarly ){ break; }
-    }
-
-    return Promise.all( runPs ).then(function( thens ){
-      var postpass = [];
-      var p = 0;
-
-      // fill postpass with the total result joined from all threads
-      for( var i = 0; i < thens.length; i++ ){
-        var then = thens[i]; // array result from thread i
-
-        for( var j = 0; j < then.length; j++ ){
-          var t = then[j]; // array element
-
-          postpass[ p++ ] = t;
-        }
-      }
-
-      return postpass;
-    });
-  },
-
-  // parallel version of array.map()
-  map: function( fn ){
-    var self = this;
-
-    self.require( fn, '_$_$_fabmap' );
-
-    return self.spread(function( split ){
-      var mapped = [];
-      var origResolve = resolve; // jshint ignore:line
-
-      resolve = function( val ){ // jshint ignore:line
-        mapped.push( val );
-      };
-
-      for( var i = 0; i < split.length; i++ ){
-        var oldLen = mapped.length;
-        var ret = _$_$_fabmap( split[i] ); // jshint ignore:line
-        var nothingInsdByResolve = oldLen === mapped.length;
-
-        if( nothingInsdByResolve ){
-          mapped.push( ret );
-        }
-      }
-
-      resolve = origResolve; // jshint ignore:line
-
-      return mapped;
-    });
-
-  },
-
-  // parallel version of array.filter()
-  filter: function( fn ){
-    var _p = this._private;
-    var pass = _p.pass[0];
-
-    return this.map( fn ).then(function( include ){
-      var ret = [];
-
-      for( var i = 0; i < pass.length; i++ ){
-        var datum = pass[i];
-        var incDatum = include[i];
-
-        if( incDatum ){
-          ret.push( datum );
-        }
-      }
-
-      return ret;
-    });
-  },
-
-  // sorts the passed array using a divide and conquer strategy
-  sort: function( cmp ){
-    var self = this;
-    var P = this._private.pass[0].length;
-    var subsize = this.spreadSize();
-
-    cmp = cmp || function( a, b ){ // default comparison function
-      if( a < b ){
-        return -1;
-      } else if( a > b ){
-        return 1;
-      }
-
-      return 0;
-    };
-
-    self.require( cmp, '_$_$_cmp' );
-
-    return self.spread(function( split ){ // sort each split normally
-      var sortedSplit = split.sort( _$_$_cmp ); // jshint ignore:line
-      resolve( sortedSplit ); // jshint ignore:line
-
-    }).then(function( joined ){
-      // do all the merging in the main thread to minimise data transfer
-
-      // TODO could do merging in separate threads but would incur add'l cost of data transfer
-      // for each level of the merge
-
-      var merge = function( i, j, max ){
-        // don't overflow array
-        j = Math.min( j, P );
-        max = Math.min( max, P );
-
-        // left and right sides of merge
-        var l = i;
-        var r = j;
-
-        var sorted = [];
-
-        for( var k = l; k < max; k++ ){
-
-          var eleI = joined[i];
-          var eleJ = joined[j];
-
-          if( i < r && ( j >= max || cmp(eleI, eleJ) <= 0 ) ){
-            sorted.push( eleI );
-            i++;
-          } else {
-            sorted.push( eleJ );
-            j++;
-          }
-
-        }
-
-        // in the array proper, put the sorted values
-        for( var k = 0; k < sorted.length; k++ ){ // kth sorted item
-          var index = l + k;
-
-          joined[ index ] = sorted[k];
-        }
-      };
-
-      for( var splitL = subsize; splitL < P; splitL *= 2 ){ // merge until array is "split" as 1
-
-        for( var i = 0; i < P; i += 2*splitL ){
-          merge( i, i + splitL, i + 2*splitL );
-        }
-
-      }
-
-      return joined;
-    });
-  }
-
-
-});
-
-var defineRandomPasser = function( opts ){
-  opts = opts || {};
-
-  return function( fn, arg1 ){
-    var pass = this._private.pass.shift();
-
-    return this.random().pass( pass )[ opts.threadFn ]( fn, arg1 );
-  };
-};
-
-util.extend(fabfn, {
-  randomMap: defineRandomPasser({ threadFn: 'map' }),
-
-  reduce: defineRandomPasser({ threadFn: 'reduce' }),
-
-  reduceRight: defineRandomPasser({ threadFn: 'reduceRight' })
-});
-
-// aliases
-var fn = fabfn;
-fn.promise = fn.run;
-fn.terminate = fn.halt = fn.stop;
-fn.include = fn.require;
-
-// pull in event apis
-util.extend(fabfn, {
-  on: define.on(),
-  one: define.on({ unbindSelfOnTrigger: true }),
-  off: define.off(),
-  trigger: define.trigger()
-});
-
-define.eventAliasesOn( fabfn );
-
-module.exports = Fabric;
-
-},{"./define":1,"./is":5,"./promise":6,"./thread":7,"./util":8,"os":undefined}],4:[function(_dereq_,module,exports){
-'use strict';
-
-var Thread = _dereq_('./thread');
-var Fabric = _dereq_('./fabric');
-
-var weaver = function(){ // jshint ignore:line
-  return;
-};
-
-weaver.version = '1.2.0';
-
-weaver.thread = weaver.Thread = weaver.worker = weaver.Worker = Thread;
-weaver.fabric = weaver.Fabric = Fabric;
-
-module.exports = weaver;
-
-},{"./fabric":3,"./thread":7}],5:[function(_dereq_,module,exports){
-// type testing utility functions
-
-'use strict';
-
-var typeofstr = typeof '';
-var typeofobj = typeof {};
-var typeoffn = typeof function(){};
-
-var instanceStr = function( obj ){
-  return obj && obj.instanceString && is.fn( obj.instanceString ) ? obj.instanceString() : null;
-};
-
-var is = {
-  defined: function(obj){
-    return obj != null; // not undefined or null
-  },
-
-  string: function(obj){
-    return obj != null && typeof obj == typeofstr;
-  },
-
-  fn: function(obj){
-    return obj != null && typeof obj === typeoffn;
-  },
-
-  array: function(obj){
-    return Array.isArray ? Array.isArray(obj) : obj != null && obj instanceof Array;
-  },
-
-  plainObject: function(obj){
-    return obj != null && typeof obj === typeofobj && !is.array(obj) && obj.constructor === Object;
-  },
-
-  object: function(obj){
-    return obj != null && typeof obj === typeofobj;
-  },
-
-  number: function(obj){
-    return obj != null && typeof obj === typeof 1 && !isNaN(obj);
-  },
-
-  integer: function( obj ){
-    return is.number(obj) && Math.floor(obj) === obj;
-  },
-
-  bool: function(obj){
-    return obj != null && typeof obj === typeof true;
-  },
-
-  event: function(obj){
-    return instanceStr(obj) === 'event';
-  },
-
-  thread: function(obj){
-    return instanceStr(obj) === 'thread';
-  },
-
-  fabric: function(obj){
-    return instanceStr(obj) === 'fabric';
-  },
-
-  emptyString: function(obj){
-    if( !obj ){ // null is empty
-      return true;
-    } else if( is.string(obj) ){
-      if( obj === '' || obj.match(/^\s+$/) ){
-        return true; // empty string is empty
-      }
-    }
-
-    return false; // otherwise, we don't know what we've got
-  },
-
-  nonemptyString: function(obj){
-    if( obj && is.string(obj) && obj !== '' && !obj.match(/^\s+$/) ){
-      return true;
-    }
-
-    return false;
-  }
-};
-
-module.exports = is;
-
-},{}],6:[function(_dereq_,module,exports){
-// internal, minimal Promise impl s.t. apis can return promises in old envs
-// based on thenable (http://github.com/rse/thenable)
-
-'use strict';
-
-/*  promise states [Promises/A+ 2.1]  */
-var STATE_PENDING   = 0;                                         /*  [Promises/A+ 2.1.1]  */
-var STATE_FULFILLED = 1;                                         /*  [Promises/A+ 2.1.2]  */
-var STATE_REJECTED  = 2;                                         /*  [Promises/A+ 2.1.3]  */
-
-/*  promise object constructor  */
-var api = function (executor) {
-  /*  optionally support non-constructor/plain-function call  */
-  if (!(this instanceof api))
-    return new api(executor);
-
-  /*  initialize object  */
-  this.id           = "Thenable/1.0.7";
-  this.state        = STATE_PENDING; /*  initial state  */
-  this.fulfillValue = undefined;     /*  initial value  */     /*  [Promises/A+ 1.3, 2.1.2.2]  */
-  this.rejectReason = undefined;     /*  initial reason */     /*  [Promises/A+ 1.5, 2.1.3.2]  */
-  this.onFulfilled  = [];            /*  initial handlers  */
-  this.onRejected   = [];            /*  initial handlers  */
-
-  /*  provide optional information-hiding proxy  */
-  this.proxy = {
-    then: this.then.bind(this)
-  };
-
-  /*  support optional executor function  */
-  if (typeof executor === "function")
-    executor.call(this, this.fulfill.bind(this), this.reject.bind(this));
-};
-
-/*  promise API methods  */
-api.prototype = {
-  /*  promise resolving methods  */
-  fulfill: function (value) { return deliver(this, STATE_FULFILLED, "fulfillValue", value); },
-  reject:  function (value) { return deliver(this, STATE_REJECTED,  "rejectReason", value); },
-
-  /*  "The then Method" [Promises/A+ 1.1, 1.2, 2.2]  */
-  then: function (onFulfilled, onRejected) {
-    var curr = this;
-    var next = new api();                                    /*  [Promises/A+ 2.2.7]  */
-    curr.onFulfilled.push(
-      resolver(onFulfilled, next, "fulfill"));             /*  [Promises/A+ 2.2.2/2.2.6]  */
-    curr.onRejected.push(
-      resolver(onRejected,  next, "reject" ));             /*  [Promises/A+ 2.2.3/2.2.6]  */
-    execute(curr);
-    return next.proxy;                                       /*  [Promises/A+ 2.2.7, 3.3]  */
-  }
-};
-
-/*  deliver an action  */
-var deliver = function (curr, state, name, value) {
-  if (curr.state === STATE_PENDING) {
-    curr.state = state;                                      /*  [Promises/A+ 2.1.2.1, 2.1.3.1]  */
-    curr[name] = value;                                      /*  [Promises/A+ 2.1.2.2, 2.1.3.2]  */
-    execute(curr);
-  }
-  return curr;
-};
-
-/*  execute all handlers  */
-var execute = function (curr) {
-  if (curr.state === STATE_FULFILLED)
-    execute_handlers(curr, "onFulfilled", curr.fulfillValue);
-  else if (curr.state === STATE_REJECTED)
-    execute_handlers(curr, "onRejected",  curr.rejectReason);
-};
-
-/*  execute particular set of handlers  */
-var execute_handlers = function (curr, name, value) {
-  /* global setImmediate: true */
-  /* global setTimeout: true */
-
-  /*  short-circuit processing  */
-  if (curr[name].length === 0)
-    return;
-
-  /*  iterate over all handlers, exactly once  */
-  var handlers = curr[name];
-  curr[name] = [];                                             /*  [Promises/A+ 2.2.2.3, 2.2.3.3]  */
-  var func = function () {
-    for (var i = 0; i < handlers.length; i++)
-      handlers[i](value);                                  /*  [Promises/A+ 2.2.5]  */
-  };
-
-  /*  execute procedure asynchronously  */                     /*  [Promises/A+ 2.2.4, 3.1]  */
-  if (typeof setImmediate === "function")
-    setImmediate(func);
-  else
-    setTimeout(func, 0);
-};
-
-/*  generate a resolver function  */
-var resolver = function (cb, next, method) {
-  return function (value) {
-    if (typeof cb !== "function")                            /*  [Promises/A+ 2.2.1, 2.2.7.3, 2.2.7.4]  */
-      next[method].call(next, value);                      /*  [Promises/A+ 2.2.7.3, 2.2.7.4]  */
-    else {
-      var result;
-      try { result = cb(value); }                          /*  [Promises/A+ 2.2.2.1, 2.2.3.1, 2.2.5, 3.2]  */
-      catch (e) {
-        next.reject(e);                                  /*  [Promises/A+ 2.2.7.2]  */
-        return;
-      }
-      resolve(next, result);                               /*  [Promises/A+ 2.2.7.1]  */
-    }
-  };
-};
-
-/*  "Promise Resolution Procedure"  */                           /*  [Promises/A+ 2.3]  */
-var resolve = function (promise, x) {
-  /*  sanity check arguments  */                               /*  [Promises/A+ 2.3.1]  */
-  if (promise === x || promise.proxy === x) {
-    promise.reject(new TypeError("cannot resolve promise with itself"));
-    return;
-  }
-
-  /*  surgically check for a "then" method
-    (mainly to just call the "getter" of "then" only once)  */
-  var then;
-  if ((typeof x === "object" && x !== null) || typeof x === "function") {
-    try { then = x.then; }                                   /*  [Promises/A+ 2.3.3.1, 3.5]  */
-    catch (e) {
-      promise.reject(e);                                   /*  [Promises/A+ 2.3.3.2]  */
-      return;
-    }
-  }
-
-  /*  handle own Thenables    [Promises/A+ 2.3.2]
-    and similar "thenables" [Promises/A+ 2.3.3]  */
-  if (typeof then === "function") {
-    var resolved = false;
-    try {
-      /*  call retrieved "then" method */                  /*  [Promises/A+ 2.3.3.3]  */
-      then.call(x,
-        /*  resolvePromise  */                           /*  [Promises/A+ 2.3.3.3.1]  */
-        function (y) {
-          if (resolved) return; resolved = true;       /*  [Promises/A+ 2.3.3.3.3]  */
-          if (y === x)                                 /*  [Promises/A+ 3.6]  */
-            promise.reject(new TypeError("circular thenable chain"));
-          else
-            resolve(promise, y);
-        },
-
-        /*  rejectPromise  */                            /*  [Promises/A+ 2.3.3.3.2]  */
-        function (r) {
-          if (resolved) return; resolved = true;       /*  [Promises/A+ 2.3.3.3.3]  */
-          promise.reject(r);
-        }
-      );
-    }
-    catch (e) {
-      if (!resolved)                                       /*  [Promises/A+ 2.3.3.3.3]  */
-        promise.reject(e);                               /*  [Promises/A+ 2.3.3.3.4]  */
-    }
-    return;
-  }
-
-  /*  handle other values  */
-  promise.fulfill(x);                                          /*  [Promises/A+ 2.3.4, 2.3.3.4]  */
-};
-
-// use native promises where possible
-var Promise = typeof Promise === 'undefined' ? api : Promise;
-
-// so we always have Promise.all()
-Promise.all = Promise.all || function( ps ){
-  return new Promise(function( resolveAll, rejectAll ){
-    var vals = new Array( ps.length );
-    var doneCount = 0;
-
-    var fulfill = function( i, val ){
-      vals[i] = val;
-      doneCount++;
-
-      if( doneCount === ps.length ){
-        resolveAll( vals );
-      }
-    };
-
-    for( var i = 0; i < ps.length; i++ ){
-      (function( i ){
-        var p = ps[i];
-        var isPromise = p.then != null;
-
-        if( isPromise ){
-          p.then(function( val ){
-            fulfill( i, val );
-          }, function( err ){
-            rejectAll( err );
-          });
-        } else {
-          var val = p;
-          fulfill( i, val );
-        }
-      })( i );
-    }
-
-  });
-};
-
-module.exports = Promise;
-
-},{}],7:[function(_dereq_,module,exports){
-/*! Weaver licensed under MIT (https://tldrlegal.com/license/mit-license), copyright Max Franz */
-
-// cross-env thread/worker
-// NB : uses (heavyweight) processes on nodejs so best not to create too many threads
-
-'use strict';
-
-var window = _dereq_('./window');
-var util = _dereq_('./util');
-var Promise = _dereq_('./promise');
-var Event = _dereq_('./event');
-var define = _dereq_('./define');
-var is = _dereq_('./is');
-
-var Thread = function( opts ){
-  if( !(this instanceof Thread) ){
-    return new Thread( opts );
-  }
-
-  var _p = this._private = {
-    requires: [],
-    files: [],
-    queue: null,
-    pass: [],
-    disabled: false
-  };
-
-  if( is.plainObject(opts) ){
-    if( opts.disabled != null ){
-      _p.disabled = !!opts.disabled;
-    }
-  }
-
-};
-
-var thdfn = Thread.prototype; // short alias
-
-var stringifyFieldVal = function( val ){
-  var valStr = is.fn( val ) ? val.toString() : "JSON.parse('" + JSON.stringify(val) + "')";
-
-  return valStr;
-};
-
-// allows for requires with prototypes and subobjs etc
-var fnAsRequire = function( fn ){
-  var req;
-  var fnName;
-
-  if( is.object(fn) && fn.fn ){ // manual fn
-    req = fnAs( fn.fn, fn.name );
-    fnName = fn.name;
-    fn = fn.fn;
-  } else if( is.fn(fn) ){ // auto fn
-    req = fn.toString();
-    fnName = fn.name;
-  } else if( is.string(fn) ){ // stringified fn
-    req = fn;
-  } else if( is.object(fn) ){ // plain object
-    if( fn.proto ){
-      req = '';
-    } else {
-      req = fn.name + ' = {};';
-    }
-
-    fnName = fn.name;
-    fn = fn.obj;
-  }
-
-  req += '\n';
-
-  var protoreq = function( val, subname ){
-    if( val.prototype ){
-      var protoNonempty = false;
-      for( var prop in val.prototype ){ protoNonempty = true; break; } // jshint ignore:line
-
-      if( protoNonempty ){
-        req += fnAsRequire( {
-          name: subname,
-          obj: val,
-          proto: true
-        }, val );
-      }
-    }
-  };
-
-  // pull in prototype
-  if( fn.prototype && fnName != null ){
-
-    for( var name in fn.prototype ){
-      var protoStr = '';
-
-      var val = fn.prototype[ name ];
-      var valStr = stringifyFieldVal( val );
-      var subname = fnName + '.prototype.' + name;
-
-      protoStr += subname + ' = ' + valStr + ';\n';
-
-      if( protoStr ){
-        req += protoStr;
-      }
-
-      protoreq( val, subname ); // subobject with prototype
-    }
-
-  }
-
-  // pull in properties for obj/fns
-  if( !is.string(fn) ){ for( var name in fn ){
-    var propsStr = '';
-
-    if( fn.hasOwnProperty(name) ){
-      var val = fn[ name ];
-      var valStr = stringifyFieldVal( val );
-      var subname = fnName + '["' + name + '"]';
-
-      propsStr += subname + ' = ' + valStr + ';\n';
-    }
-
-    if( propsStr ){
-      req += propsStr;
-    }
-
-    protoreq( val, subname ); // subobject with prototype
-  } }
-
-  return req;
-};
-
-var isPathStr = function( str ){
-  return is.string(str) && str.match(/\.js$/);
-};
-
-util.extend(thdfn, {
-
-  instanceString: function(){ return 'thread'; },
-
-  require: function( fn, as ){
-    var requires = this._private.requires;
-
-    if( isPathStr(fn) ){
-      this._private.files.push( fn );
-
-      return this;
-    }
-
-    if( as ){
-      if( is.fn(fn) ){
-        fn = { name: as, fn: fn };
-      } else {
-        fn = { name: as, obj: fn };
-      }
-    } else {
-      if( is.fn(fn) ){
-        if( !fn.name ){
-          throw 'The function name could not be automatically determined.  Use thread.require( someFunction, "someFunction" )';
-        }
-
-        fn = { name: fn.name, fn: fn };
-      }
-    }
-
-    requires.push( fn );
-
-    return this; // chaining
-  },
-
-  pass: function( data ){
-    this._private.pass.push( data );
-
-    return this; // chaining
-  },
-
-  run: function( fn, pass ){ // fn used like main()
-    var self = this;
-    var _p = this._private;
-    pass = pass || _p.pass.shift();
-
-    if( _p.stopped ){
-      throw 'Attempted to run a stopped thread!  Start a new thread or do not stop the existing thread and reuse it.';
-    }
-
-    if( _p.running ){
-      return ( _p.queue = _p.queue.then(function(){ // inductive step
-        return self.run( fn, pass );
-      }) );
-    }
-
-    var useWW = window != null && !_p.disabled;
-    var useNode = !window && typeof module !== 'undefined' && !_p.disabled;
-
-    self.trigger('run');
-
-    var runP = new Promise(function( resolve, reject ){
-
-      _p.running = true;
-
-      var threadTechAlreadyExists = _p.ran;
-
-      var fnImplStr = is.string( fn ) ? fn : fn.toString();
-
-      // worker code to exec
-      var fnStr = '\n' + ( _p.requires.map(function( r ){
-        return fnAsRequire( r );
-      }) ).concat( _p.files.map(function( f ){
-        if( useWW ){
-          var wwifyFile = function( file ){
-            if( file.match(/^\.\//) || file.match(/^\.\./) ){
-              return window.location.origin + window.location.pathname + file;
-            } else if( file.match(/^\//) ){
-              return window.location.origin + '/' + file;
-            }
-            return file;
-          };
-
-          return 'importScripts("' + wwifyFile(f) + '");';
-        } else if( useNode ) {
-          return 'eval( require("fs").readFileSync("' + f + '", { encoding: "utf8" }) );';
-        } else {
-          throw 'External file `' + f + '` can not be required without any threading technology.';
-        }
-      }) ).concat([
-        '( function(){',
-          'var ret = (' + fnImplStr + ')(' + JSON.stringify(pass) + ');',
-          'if( ret !== undefined ){ resolve(ret); }', // assume if ran fn returns defined value (incl. null), that we want to resolve to it
-        '} )()\n'
-      ]).join('\n');
-
-      // because we've now consumed the requires, empty the list so we don't dupe on next run()
-      _p.requires = [];
-      _p.files = [];
-
-      if( useWW ){
-        var fnBlob, fnUrl;
-
-        // add normalised thread api functions
-        if( !threadTechAlreadyExists ){
-          var fnPre = fnStr + '';
-
-          fnStr = [
-            'function _ref_(o){ return eval(o); };',
-            'function broadcast(m){ return message(m); };', // alias
-            'function message(m){ postMessage(m); };',
-            'function listen(fn){',
-            '  self.addEventListener("message", function(m){ ',
-            '    if( typeof m === "object" && (m.data.$$eval || m.data === "$$start") ){',
-            '    } else { ',
-            '      fn( m.data );',
-            '    }',
-            '  });',
-            '};',
-            'self.addEventListener("message", function(m){  if( m.data.$$eval ){ eval( m.data.$$eval ); }  });',
-            'function resolve(v){ postMessage({ $$resolve: v }); };',
-            'function reject(v){ postMessage({ $$reject: v }); };'
-          ].join('\n');
-
-          fnStr += fnPre;
-
-          fnBlob = new Blob([ fnStr ], {
-            type: 'application/javascript'
-          });
-          fnUrl = window.URL.createObjectURL( fnBlob );
-        }
-        // create webworker and let it exec the serialised code
-        var ww = _p.webworker = _p.webworker || new Worker( fnUrl );
-
-        if( threadTechAlreadyExists ){ // then just exec new run() code
-          ww.postMessage({
-            $$eval: fnStr
-          });
-        }
-
-        // worker messages => events
-        var cb;
-        ww.addEventListener('message', cb = function( m ){
-          var isObject = is.object(m) && is.object( m.data );
-
-          if( isObject && ('$$resolve' in m.data) ){
-            ww.removeEventListener('message', cb); // done listening b/c resolve()
-
-            resolve( m.data.$$resolve );
-          } else if( isObject && ('$$reject' in m.data) ){
-            ww.removeEventListener('message', cb); // done listening b/c reject()
-
-            reject( m.data.$$reject );
-          } else {
-            self.trigger( new Event(m, { type: 'message', message: m.data }) );
-          }
-        }, false);
-
-        if( !threadTechAlreadyExists ){
-          ww.postMessage('$$start'); // start up the worker
-        }
-
-      } else if( useNode ){
-        // create a new process
-
-        if( !_p.child ){
-          _p.child = ( _dereq_('child_process').fork( _dereq_('path').join(__dirname, 'thread-node-fork') ) );
-        }
-
-        var child = _p.child;
-
-        // child process messages => events
-        var cb;
-        child.on('message', cb = function( m ){
-          if( is.object(m) && ('$$resolve' in m) ){
-            child.removeListener('message', cb); // done listening b/c resolve()
-
-            resolve( m.$$resolve );
-          } else if( is.object(m) && ('$$reject' in m) ){
-            child.removeListener('message', cb); // done listening b/c reject()
-
-            reject( m.$$reject );
-          } else {
-            self.trigger( new Event({}, { type: 'message', message: m }) );
-          }
-        });
-
-        // ask the child process to eval the worker code
-        child.send({
-          $$eval: fnStr
-        });
-
-      } else { // use a fallback mechanism using a timeout
-
-        var promiseResolve = resolve;
-        var promiseReject = reject;
-
-        var timer = _p.timer = _p.timer || {
-
-          listeners: [],
-
-          exec: function(){
-            // as a string so it can't be mangled by minifiers and processors
-            fnStr = [
-              'function _ref_(o){ return eval(o); };',
-              'function broadcast(m){ return message(m); };',
-              'function message(m){ self.trigger( new Event({}, { type: "message", message: m }) ); };',
-              'function listen(fn){ timer.listeners.push( fn ); };',
-              'function resolve(v){ promiseResolve(v); };',
-              'function reject(v){ promiseReject(v); };'
-            ].join('\n') + fnStr;
-
-            // the .run() code
-            eval( fnStr ); // jshint ignore:line
-          },
-
-          message: function( m ){
-            var ls = timer.listeners;
-
-            for( var i = 0; i < ls.length; i++ ){
-              var fn = ls[i];
-
-              fn( m );
-            }
-          }
-
-        };
-
-        timer.exec();
-      }
-
-    }).then(function( v ){
-      _p.running = false;
-      _p.ran = true;
-
-      self.trigger('ran');
-
-      return v;
-    });
-
-    if( _p.queue == null ){
-      _p.queue = runP; // i.e. first step of inductive promise chain (for queue)
-    }
-
-    return runP;
-  },
-
-  // send the thread a message
-  message: function( m ){
-    var _p = this._private;
-
-    if( _p.webworker ){
-      _p.webworker.postMessage( m );
-    }
-
-    if( _p.child ){
-      _p.child.send( m );
-    }
-
-    if( _p.timer ){
-      _p.timer.message( m );
-    }
-
-    return this; // chaining
-  },
-
-  stop: function(){
-    var _p = this._private;
-
-    if( _p.webworker ){
-      _p.webworker.terminate();
-    }
-
-    if( _p.child ){
-      _p.child.kill();
-    }
-
-    if( _p.timer ){
-      // nothing we can do if we've run a timeout
-    }
-
-    _p.stopped = true;
-
-    return this.trigger('stop'); // chaining
-  },
-
-  stopped: function(){
-    return this._private.stopped;
-  }
-
-});
-
-// turns a stringified function into a (re)named function
-var fnAs = function( fn, name ){
-  var fnStr = fn.toString();
-  fnStr = fnStr.replace(/function\s*?\S*?\s*?\(/, 'function ' + name + '(');
-
-  return fnStr;
-};
-
-var defineFnal = function( opts ){
-  opts = opts || {};
-
-  return function fnalImpl( fn, arg1 ){
-    var fnStr = fnAs( fn, '_$_$_' + opts.name );
-
-    this.require( fnStr );
-
-    return this.run( [
-      'function( data ){',
-      '  var origResolve = resolve;',
-      '  var res = [];',
-      '  ',
-      '  resolve = function( val ){',
-      '    res.push( val );',
-      '  };',
-      '  ',
-      '  var ret = data.' + opts.name + '( _$_$_' + opts.name + ( arguments.length > 1 ? ', ' + JSON.stringify(arg1) : '' ) + ' );',
-      '  ',
-      '  resolve = origResolve;',
-      '  resolve( res.length > 0 ? res : ret );',
-      '}'
-    ].join('\n') );
-  };
-};
-
-util.extend(thdfn, {
-  reduce: defineFnal({ name: 'reduce' }),
-
-  reduceRight: defineFnal({ name: 'reduceRight' }),
-
-  map: defineFnal({ name: 'map' })
-});
-
-// aliases
-var fn = thdfn;
-fn.promise = fn.run;
-fn.terminate = fn.halt = fn.stop;
-fn.include = fn.require;
-
-// pull in event apis
-util.extend(thdfn, {
-  on: define.on(),
-  one: define.on({ unbindSelfOnTrigger: true }),
-  off: define.off(),
-  trigger: define.trigger()
-});
-
-define.eventAliasesOn( thdfn );
-
-module.exports = Thread;
-
-},{"./define":1,"./event":2,"./is":5,"./promise":6,"./util":8,"./window":9,"child_process":undefined,"path":undefined}],8:[function(_dereq_,module,exports){
-'use strict';
-
-var is = _dereq_('./is');
-var util;
-
-// utility functions only for internal use
-util = {
-
-  // the jquery extend() function
-  // NB: modified to use is etc since we can't use jquery functions
-  extend: function() {
-    var options, name, src, copy, copyIsArray, clone,
-      target = arguments[0] || {},
-      i = 1,
-      length = arguments.length,
-      deep = false;
-
-    // Handle a deep copy situation
-    if ( typeof target === 'boolean' ) {
-      deep = target;
-      target = arguments[1] || {};
-      // skip the boolean and the target
-      i = 2;
-    }
-
-    // Handle case when target is a string or something (possible in deep copy)
-    if ( typeof target !== 'object' && !is.fn(target) ) {
-      target = {};
-    }
-
-    // extend jQuery itself if only one argument is passed
-    if ( length === i ) {
-      target = this;
-      --i;
-    }
-
-    for ( ; i < length; i++ ) {
-      // Only deal with non-null/undefined values
-      if ( (options = arguments[ i ]) != null ) {
-        // Extend the base object
-        for ( name in options ) {
-          src = target[ name ];
-          copy = options[ name ];
-
-          // Prevent never-ending loop
-          if ( target === copy ) {
-            continue;
-          }
-
-          // Recurse if we're merging plain objects or arrays
-          if ( deep && copy && ( is.plainObject(copy) || (copyIsArray = is.array(copy)) ) ) {
-            if ( copyIsArray ) {
-              copyIsArray = false;
-              clone = src && is.array(src) ? src : [];
-
-            } else {
-              clone = src && is.plainObject(src) ? src : {};
-            }
-
-            // Never move original objects, clone them
-            target[ name ] = util.extend( deep, clone, copy );
-
-          // Don't bring in undefined values
-          } else if ( copy !== undefined ) {
-            target[ name ] = copy;
-          }
-        }
-      }
-    }
-
-    // Return the modified object
-    return target;
-  },
-
-  error: function( msg ){
-    if( console ){
-      if( console.error ){
-        console.error.apply( console, arguments );
-      } else if( console.log ){
-        console.log.apply( console, arguments );
-      } else {
-        throw msg;
-      }
-    } else {
-      throw msg;
-    }
-  }
-};
-
-module.exports = util;
-
-},{"./is":5}],9:[function(_dereq_,module,exports){
-module.exports = ( typeof window === 'undefined' ? null : window );
-
-},{}]},{},[4])(4)
-});
-
-
-//# sourceMappingURL=weaver.js.map
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../timers-browserify/main.js */ "../node_modules/timers-browserify/main.js").setImmediate, "/"))
-
-/***/ }),
-
 /***/ "../node_modules/webpack/buildin/global.js":
 /*!*************************************************!*\
   !*** ../node_modules/webpack/buildin/global.js ***!
@@ -38282,18 +40270,20 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var cytoscape__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! cytoscape */ "../node_modules/cytoscape/dist/cytoscape.cjs.js");
 /* harmony import */ var cytoscape__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(cytoscape__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var cytoscape_spread__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! cytoscape-spread */ "../node_modules/cytoscape-spread/cytoscape-spread.js");
-/* harmony import */ var cytoscape_spread__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(cytoscape_spread__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var cytoscape_avsdf__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! cytoscape-avsdf */ "../node_modules/cytoscape-avsdf/cytoscape-avsdf.js");
+/* harmony import */ var cytoscape_avsdf__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(cytoscape_avsdf__WEBPACK_IMPORTED_MODULE_3__);
 /* harmony import */ var react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! react-cytoscapejs */ "../node_modules/react-cytoscapejs/dist/react-cytoscape.js");
 /* harmony import */ var react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4__);
 /* harmony import */ var _util_helper__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./util/helper */ "./util/helper.ts");
 
 
+ //import spread from 'cytoscape-spread';
+//import klay from 'cytoscape-klay';
 
 
 
 
-cytoscape__WEBPACK_IMPORTED_MODULE_2___default.a.use(cytoscape_spread__WEBPACK_IMPORTED_MODULE_3___default.a);
+cytoscape__WEBPACK_IMPORTED_MODULE_2___default.a.use(cytoscape_avsdf__WEBPACK_IMPORTED_MODULE_3___default.a);
 
 var MainPanel =
 /** @class */
@@ -38346,9 +40336,7 @@ function (_super) {
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4___default.a, {
       elements: elements,
       autoungrabify: true,
-      zoomingEnabled: false,
       userZoomingEnabled: false,
-      panningEnabled: false,
       userPanningEnabled: false,
       stylesheet: [{
         selector: 'node',
@@ -38373,8 +40361,9 @@ function (_super) {
         }
       }],
       layout: {
-        name: 'spread',
-        fit: true
+        name: 'avsdf',
+        fit: true,
+        nodeSeparation: 150
       },
       style: {
         width: width,

@@ -2,11 +2,13 @@ import React, { PureComponent } from 'react';
 import { PanelProps, Vector as VectorData } from '@grafana/data';
 import { SimpleOptions } from 'types';
 import cytoscape from 'cytoscape';
-import spread from 'cytoscape-spread';
+//import spread from 'cytoscape-spread';
+//import klay from 'cytoscape-klay';
+import avsdf from 'cytoscape-avsdf';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { getGraphElements } from './util/helper';
 
-cytoscape.use(spread);
+cytoscape.use(avsdf);
 
 interface Buffer extends VectorData {
   buffer: Array<string | number>;
@@ -52,9 +54,7 @@ export class MainPanel extends PureComponent<Props> {
       <CytoscapeComponent
         elements={elements}
         autoungrabify={true}
-        zoomingEnabled={false}
         userZoomingEnabled={false}
-        panningEnabled={false}
         userPanningEnabled={false}
         stylesheet={[
           {
@@ -82,8 +82,9 @@ export class MainPanel extends PureComponent<Props> {
           },
         ]}
         layout={{
-          name: 'spread',
+          name: 'avsdf',
           fit: true,
+          nodeSeparation: 150,
         }}
         style={{
           width,

@@ -1,4 +1,6 @@
 declare module 'cytoscape-spread';
+declare module 'cytoscape-klay';
+declare module 'cytoscape-avsdf';
 
 declare module 'react-cytoscapejs' {
   import cytoscape, { NodeDataDefinition, EdgeDataDefinition } from 'cytoscape';
@@ -10,7 +12,7 @@ declare module 'react-cytoscapejs' {
     cy?: (cy: cytoscape.Core) => void;
     style?: CSSProperties;
     elements: ElementDefinition[];
-    layout?: LayoutOptions;
+    layout?: any;
     stylesheet?: any;
     className?: string;
     zoom?: number;
