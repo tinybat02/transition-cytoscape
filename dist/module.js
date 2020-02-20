@@ -38345,6 +38345,11 @@ function (_super) {
 
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(react_cytoscapejs__WEBPACK_IMPORTED_MODULE_4___default.a, {
       elements: elements,
+      autoungrabify: true,
+      zoomingEnabled: false,
+      userZoomingEnabled: false,
+      panningEnabled: false,
+      userPanningEnabled: false,
       stylesheet: [{
         selector: 'node',
         style: {
@@ -38360,9 +38365,9 @@ function (_super) {
         style: {
           'curve-style': 'bezier',
           'line-color': '#1990c1',
-          width: 0.3,
-          label: 'data(value)',
-          'font-size': '1em',
+          width: 'data(value)',
+          //label: 'data(value)',
+          //'font-size': '0.8em',
           'target-arrow-shape': 'vee',
           'target-arrow-color': '#1990c1'
         }
@@ -38457,7 +38462,7 @@ var getGraphElements = function getGraphElements(bufferSource, bufferTarget, buf
       data: {
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
-        value: bufferValue[index]
+        value: bufferValue[index] / 100
       }
     });
   });

@@ -51,6 +51,11 @@ export class MainPanel extends PureComponent<Props> {
     return (
       <CytoscapeComponent
         elements={elements}
+        autoungrabify={true}
+        zoomingEnabled={false}
+        userZoomingEnabled={false}
+        panningEnabled={false}
+        userPanningEnabled={false}
         stylesheet={[
           {
             selector: 'node',
@@ -68,9 +73,9 @@ export class MainPanel extends PureComponent<Props> {
             style: {
               'curve-style': 'bezier',
               'line-color': '#1990c1',
-              width: 0.3,
-              label: 'data(value)',
-              'font-size': '0.8em',
+              width: 'data(value)',
+              //label: 'data(value)',
+              //'font-size': '0.8em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
             },

@@ -19,6 +19,8 @@ declare module 'react-cytoscapejs' {
     maxZoom?: number;
     zoomingEnabled?: boolean;
     userZoomingEnabled?: boolean;
+    panningEnabled?: boolean;
+    userPanningEnabled?: boolean;
     boxSelectionEnabled?: boolean;
     autoungrabify?: boolean;
     autounselectify?: boolean;
