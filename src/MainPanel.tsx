@@ -2,8 +2,6 @@ import React, { PureComponent } from 'react';
 import { PanelProps, Vector as VectorData } from '@grafana/data';
 import { SimpleOptions } from 'types';
 import cytoscape from 'cytoscape';
-//import spread from 'cytoscape-spread';
-//import klay from 'cytoscape-klay';
 import avsdf from 'cytoscape-avsdf';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { getGraphElements } from './util/helper';

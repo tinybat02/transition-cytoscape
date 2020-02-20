@@ -1,5 +1,3 @@
-declare module 'cytoscape-spread';
-declare module 'cytoscape-klay';
 declare module 'cytoscape-avsdf';
 
 declare module 'react-cytoscapejs' {
