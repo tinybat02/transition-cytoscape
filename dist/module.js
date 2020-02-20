@@ -38462,7 +38462,7 @@ var getGraphElements = function getGraphElements(bufferSource, bufferTarget, buf
       data: {
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
-        value: bufferValue[index] / 100
+        value: Math.round(bufferValue[index] / 75) / 2
       }
     });
   });

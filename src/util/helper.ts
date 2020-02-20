@@ -24,7 +24,7 @@ export const getGraphElements = (bufferSource: string[], bufferTarget: string[],
       data: {
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
-        value: bufferValue[index] / 100,
+        value: Math.round(bufferValue[index] / 75) / 2,
       },
     });
   });
