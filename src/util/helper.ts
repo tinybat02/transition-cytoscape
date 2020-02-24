@@ -24,7 +24,8 @@ export const getGraphElements = (bufferSource: string[], bufferTarget: string[],
       data: {
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
-        value: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2,
+        // value: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2,
+        value: bufferValue[index],
       },
     });
   });
