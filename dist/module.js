@@ -40360,9 +40360,9 @@ function (_super) {
           'target-arrow-color': 'red',
           'text-background-opacity': 1,
           color: '#fff',
-          'font-size': '1.3em',
+          'font-size': '1.2em',
           'text-background-color': '#000',
-          'text-background-padding': 3,
+          'text-background-padding': 2,
           label: 'data(value)'
         }
       }],
