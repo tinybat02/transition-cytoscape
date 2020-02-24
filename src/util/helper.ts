@@ -10,6 +10,7 @@ interface EdgeType {
     source: string;
     target: string;
     value: number;
+    thick: number;
   };
 }
 
@@ -26,6 +27,7 @@ export const getGraphElements = (bufferSource: string[], bufferTarget: string[],
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
         // value: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2,
         value: bufferValue[index],
+        thick: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2,
       },
     });
   });

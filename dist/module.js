@@ -40288,6 +40288,18 @@ function (_super) {
   };
 
   MainPanel.prototype.componentDidUpdate = function (prevProps) {
+    this.cy.autolock(true);
+    this.cy.autoungrabify(true);
+    this.cy.on('mouseover', 'node', function (e) {
+      var ele = e.target; // ele.connectedEdges().style({ 'line-color': 'red', width: 2, label: '' });
+
+      ele.connectedEdges().addClass('hover');
+    });
+    this.cy.on('mouseout', 'node', function (e) {
+      var ele = e.target;
+      ele.connectedEdges().removeClass('hover');
+    });
+
     if (prevProps.data.series[0] !== this.props.data.series[0]) {
       var bufferSource = this.props.data.series[0].fields[0].values.buffer;
       var bufferTarget = this.props.data.series[0].fields[1].values.buffer;
@@ -40324,24 +40336,34 @@ function (_super) {
         style: {
           width: nodeWidth,
           shape: 'ellipse',
-          content: 'data(label)',
+          label: 'data(label)',
           'background-color': '#b3e1f5',
           'font-family': 'monospace',
-          'text-valign': 'center',
-          events: 'no'
+          'text-valign': 'center'
         }
       }, {
         selector: 'edge',
         style: {
           'curve-style': 'bezier',
           'line-color': '#1990c1',
-          //width: 'data(value)',
-          width: 0.5,
-          label: 'data(value)',
-          'font-size': '1em',
+          width: 'data(thick)',
+          // label: 'data(value)',
+          // 'font-size': '1em',
           'target-arrow-shape': 'vee',
           'target-arrow-color': '#1990c1',
           events: 'no'
+        }
+      }, {
+        selector: 'edge.hover',
+        style: {
+          'line-color': 'red',
+          'target-arrow-color': 'red',
+          'text-background-opacity': 1,
+          color: '#fff',
+          'font-size': '1.3em',
+          'text-background-color': '#000',
+          'text-background-padding': 3,
+          label: 'data(value)'
         }
       }],
       layout: {
@@ -40438,7 +40460,8 @@ var getGraphElements = function getGraphElements(bufferSource, bufferTarget, buf
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
         // value: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2,
-        value: bufferValue[index]
+        value: bufferValue[index],
+        thick: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2
       }
     });
   });
