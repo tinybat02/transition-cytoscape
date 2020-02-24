@@ -40299,6 +40299,14 @@ function (_super) {
       var ele = e.target;
       ele.connectedEdges().removeClass('hover');
     });
+    this.cy.on('mouseover', 'edge', function (e) {
+      var ele = e.target;
+      ele.addClass('hover');
+    });
+    this.cy.on('mouseout', 'edge', function (e) {
+      var ele = e.target;
+      ele.removeClass('hover');
+    });
 
     if (prevProps.data.series[0] !== this.props.data.series[0]) {
       var bufferSource = this.props.data.series[0].fields[0].values.buffer;
@@ -40347,11 +40355,8 @@ function (_super) {
           'curve-style': 'bezier',
           'line-color': '#1990c1',
           width: 'data(thick)',
-          // label: 'data(value)',
-          // 'font-size': '1em',
           'target-arrow-shape': 'vee',
-          'target-arrow-color': '#1990c1',
-          events: 'no'
+          'target-arrow-color': '#1990c1'
         }
       }, {
         selector: 'edge.hover',

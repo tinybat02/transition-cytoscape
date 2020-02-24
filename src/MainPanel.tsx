@@ -43,6 +43,15 @@ export class MainPanel extends PureComponent<Props> {
       const ele = e.target;
       ele.connectedEdges().removeClass('hover');
     });
+    this.cy.on('mouseover', 'edge', e => {
+      const ele = e.target;
+      ele.addClass('hover');
+    });
+    this.cy.on('mouseout', 'edge', e => {
+      const ele = e.target;
+      ele.removeClass('hover');
+    });
+
     if (prevProps.data.series[0] !== this.props.data.series[0]) {
       const { buffer: bufferSource } = this.props.data.series[0].fields[0].values as Buffer;
       const { buffer: bufferTarget } = this.props.data.series[0].fields[1].values as Buffer;
@@ -86,11 +95,9 @@ export class MainPanel extends PureComponent<Props> {
               'curve-style': 'bezier',
               'line-color': '#1990c1',
               width: 'data(thick)',
-              // label: 'data(value)',
-              // 'font-size': '1em',
               'target-arrow-shape': 'vee',
               'target-arrow-color': '#1990c1',
-              events: 'no',
+              // events: 'no',
             },
           },
           {
