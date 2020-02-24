@@ -1,7 +1,11 @@
-export interface SimpleOptions {
-  text: string;
+export interface GraphSettings {
+  edgeThicknessUnit: number;
+  nodeWidth: number;
+  nodeSeparation: number;
 }
 
-export const defaults: SimpleOptions = {
-  text: 'The default text!',
+export const defaults: GraphSettings = {
+  edgeThicknessUnit: 75,
+  nodeWidth: 120,
+  nodeSeparation: 200,
 };

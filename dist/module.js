@@ -40207,9 +40207,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "react");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/ui */ "@grafana/ui");
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__);
-
 
 
 
@@ -40219,33 +40216,15 @@ function (_super) {
   Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"])(MainEditor, _super);
 
   function MainEditor() {
-    var _this = _super !== null && _super.apply(this, arguments) || this;
-
-    _this.onTextChanged = function (_a) {
-      var target = _a.target;
-
-      _this.props.onOptionsChange(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.props.options), {
-        text: target.value
-      }));
-    };
-
-    return _this;
+    return _super !== null && _super.apply(this, arguments) || this;
   }
 
   MainEditor.prototype.render = function () {
-    var options = this.props.options;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "section gf-form-group"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("h5", {
       className: "section-heading"
-    }, "Display"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
-      label: "Text",
-      labelWidth: 5,
-      inputWidth: 20,
-      type: "text",
-      onChange: this.onTextChanged,
-      value: options.text || ''
-    }));
+    }, "Display"));
   };
 
   return MainEditor;
@@ -40301,7 +40280,8 @@ function (_super) {
     var bufferSource = this.props.data.series[0].fields[0].values.buffer;
     var bufferTarget = this.props.data.series[0].fields[1].values.buffer;
     var bufferValue = this.props.data.series[0].fields[2].values.buffer;
-    var elements = Object(_util_helper__WEBPACK_IMPORTED_MODULE_5__["getGraphElements"])(bufferSource, bufferTarget, bufferValue);
+    var edgeThicknessUnit = this.props.options.edgeThicknessUnit;
+    var elements = Object(_util_helper__WEBPACK_IMPORTED_MODULE_5__["getGraphElements"])(bufferSource, bufferTarget, bufferValue, edgeThicknessUnit);
     this.setState({
       elements: elements
     });
@@ -40312,7 +40292,8 @@ function (_super) {
       var bufferSource = this.props.data.series[0].fields[0].values.buffer;
       var bufferTarget = this.props.data.series[0].fields[1].values.buffer;
       var bufferValue = this.props.data.series[0].fields[2].values.buffer;
-      var elements = Object(_util_helper__WEBPACK_IMPORTED_MODULE_5__["getGraphElements"])(bufferSource, bufferTarget, bufferValue);
+      var edgeThicknessUnit = this.props.options.edgeThicknessUnit;
+      var elements = Object(_util_helper__WEBPACK_IMPORTED_MODULE_5__["getGraphElements"])(bufferSource, bufferTarget, bufferValue, edgeThicknessUnit);
       this.setState({
         elements: elements
       });
@@ -40325,6 +40306,9 @@ function (_super) {
     var _a = this.props,
         width = _a.width,
         height = _a.height;
+    var _b = this.props.options,
+        nodeWidth = _b.nodeWidth,
+        nodeSeparation = _b.nodeSeparation;
     var elements = this.state.elements;
 
     if (elements.length === 0) {
@@ -40338,7 +40322,7 @@ function (_super) {
       stylesheet: [{
         selector: 'node',
         style: {
-          width: 120,
+          width: nodeWidth,
           shape: 'ellipse',
           content: 'data(label)',
           'background-color': '#b3e1f5',
@@ -40351,9 +40335,10 @@ function (_super) {
         style: {
           'curve-style': 'bezier',
           'line-color': '#1990c1',
-          width: 'data(value)',
-          //label: 'data(value)',
-          //'font-size': '0.8em',
+          //width: 'data(value)',
+          width: 0.5,
+          label: 'data(value)',
+          'font-size': '1em',
           'target-arrow-shape': 'vee',
           'target-arrow-color': '#1990c1',
           events: 'no'
@@ -40362,7 +40347,7 @@ function (_super) {
       layout: {
         name: 'avsdf',
         fit: true,
-        nodeSeparation: 200
+        nodeSeparation: nodeSeparation
       },
       style: {
         width: width,
@@ -40417,7 +40402,9 @@ var plugin = new _grafana_ui__WEBPACK_IMPORTED_MODULE_0__["PanelPlugin"](_MainPa
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "defaults", function() { return defaults; });
 var defaults = {
-  text: 'The default text!'
+  edgeThicknessUnit: 75,
+  nodeWidth: 120,
+  nodeSeparation: 200
 };
 
 /***/ }),
@@ -40434,7 +40421,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getGraphElements", function() { return getGraphElements; });
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
 
-var getGraphElements = function getGraphElements(bufferSource, bufferTarget, bufferValue) {
+var getGraphElements = function getGraphElements(bufferSource, bufferTarget, bufferValue, edgeThicknessUnit) {
   var allNodes = Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(new Set(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(bufferSource, bufferTarget)));
 
   var elements = allNodes.map(function (item) {
@@ -40450,7 +40437,7 @@ var getGraphElements = function getGraphElements(bufferSource, bufferTarget, buf
       data: {
         source: item !== '' ? item : 'N/A',
         target: bufferTarget[index] !== '' ? bufferTarget[index] : 'N/A',
-        value: Math.ceil(bufferValue[index] / 75) / 2
+        value: Math.ceil(bufferValue[index] / edgeThicknessUnit) / 2
       }
     });
   });
