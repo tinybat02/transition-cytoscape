@@ -40207,30 +40207,69 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "react");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/ui */ "@grafana/ui");
+/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__);
 
 
 
-var MainEditor =
-/** @class */
-function (_super) {
-  Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"])(MainEditor, _super);
+var MainEditor = function MainEditor(_a) {
+  var options = _a.options,
+      onOptionsChange = _a.onOptionsChange;
 
-  function MainEditor() {
-    return _super !== null && _super.apply(this, arguments) || this;
-  }
+  var _b = Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__read"])(Object(react__WEBPACK_IMPORTED_MODULE_1__["useState"])(options), 2),
+      inputs = _b[0],
+      setInputs = _b[1];
 
-  MainEditor.prototype.render = function () {
-    return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
-      className: "section gf-form-group"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("h5", {
-      className: "section-heading"
-    }, "Display"));
+  var handleChange = function handleChange(e) {
+    var _a = e.target,
+        name = _a.name,
+        value = _a.value;
+    setInputs(function (prevState) {
+      var _a;
+
+      return Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, prevState), (_a = {}, _a[name] = value, _a));
+    });
   };
 
-  return MainEditor;
-}(react__WEBPACK_IMPORTED_MODULE_1__["PureComponent"]);
+  var handleSubmit = function handleSubmit() {
+    onOptionsChange(inputs);
+  };
 
-
+  return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["PanelOptionsGroup"], null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    className: "editor-row"
+  }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    className: "section gf-form-group"
+  }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("h5", {
+    className: "section-heading"
+  }, "Graph Settings"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    label: "Node Width",
+    labelWidth: 10,
+    inputWidth: 80,
+    type: "number",
+    name: "nodeWidth",
+    value: inputs.nodeWidth,
+    onChange: handleChange
+  }), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    label: "Node Distance",
+    labelWidth: 10,
+    inputWidth: 80,
+    type: "number",
+    name: "nodeSeparation",
+    value: inputs.nodeSeparation,
+    onChange: handleChange
+  }), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    label: "Thickness Unit",
+    labelWidth: 10,
+    inputWidth: 80,
+    type: "number",
+    name: "edgeThicknessUnit",
+    value: inputs.edgeThicknessUnit,
+    onChange: handleChange
+  }))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("button", {
+    className: "btn btn-inverse",
+    onClick: handleSubmit
+  }, "Submit"));
+};
 
 /***/ }),
 
