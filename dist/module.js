@@ -40327,24 +40327,34 @@ function (_super) {
   };
 
   MainPanel.prototype.componentDidUpdate = function (prevProps) {
+    var _this = this;
+
     this.cy.autolock(true);
     this.cy.autoungrabify(true);
-    this.cy.on('mouseover', 'node', function (e) {
+    this.cy.on('select', 'node', function (e) {
       var ele = e.target; // ele.connectedEdges().style({ 'line-color': 'red', width: 2, label: '' });
 
       ele.connectedEdges().addClass('hover');
     });
-    this.cy.on('mouseout', 'node', function (e) {
-      var ele = e.target;
-      ele.connectedEdges().removeClass('hover');
-    });
-    this.cy.on('mouseover', 'edge', function (e) {
+    this.cy.on('select', 'edge', function (e) {
       var ele = e.target;
       ele.addClass('hover');
     });
-    this.cy.on('mouseout', 'edge', function (e) {
+    this.cy.on('unselect', 'node', function (e) {
+      var ele = e.target; // ele.connectedEdges().style({ 'line-color': 'red', width: 2, label: '' });
+
+      ele.connectedEdges().removeClass('hover');
+    });
+    this.cy.on('unselect', 'edge', function (e) {
       var ele = e.target;
       ele.removeClass('hover');
+    });
+    this.cy.on('click', function (e) {
+      var ele = e.target;
+
+      if (ele === _this.cy) {
+        _this.cy.elements().removeClass('hover');
+      }
     });
 
     if (prevProps.data.series[0] !== this.props.data.series[0]) {

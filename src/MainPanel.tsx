@@ -34,22 +34,29 @@ export class MainPanel extends PureComponent<Props> {
   componentDidUpdate(prevProps: PanelProps) {
     this.cy.autolock(true);
     this.cy.autoungrabify(true);
-    this.cy.on('mouseover', 'node', e => {
+    this.cy.on('select', 'node', e => {
       const ele = e.target;
       // ele.connectedEdges().style({ 'line-color': 'red', width: 2, label: '' });
       ele.connectedEdges().addClass('hover');
     });
-    this.cy.on('mouseout', 'node', e => {
-      const ele = e.target;
-      ele.connectedEdges().removeClass('hover');
-    });
-    this.cy.on('mouseover', 'edge', e => {
+    this.cy.on('select', 'edge', e => {
       const ele = e.target;
       ele.addClass('hover');
     });
-    this.cy.on('mouseout', 'edge', e => {
+    this.cy.on('unselect', 'node', e => {
+      const ele = e.target;
+      // ele.connectedEdges().style({ 'line-color': 'red', width: 2, label: '' });
+      ele.connectedEdges().removeClass('hover');
+    });
+    this.cy.on('unselect', 'edge', e => {
       const ele = e.target;
       ele.removeClass('hover');
+    });
+    this.cy.on('click', e => {
+      const ele = e.target;
+      if (ele === this.cy) {
+        this.cy.elements().removeClass('hover');
+      }
     });
 
     if (prevProps.data.series[0] !== this.props.data.series[0]) {
